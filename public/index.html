@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clash of Champion - Game Kuis Real-Time</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body style="position:relative; min-height:100vh; overflow-x:hidden;">
+    <!-- THREE.JS 3D CANVAS & ATMOSPHERIC OVERLAY -->
+    <div id="three-bg-canvas" class="three-bg-canvas"></div>
+    <div id="three-bg-overlay" class="three-bg-overlay"></div>
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="landing-nav container" style="max-width:1200px;">
+        <div class="landing-nav-brand">
+            <span style="font-size:1.8rem;">⚔️</span>
+            <div>
+                <strong style="font-family:'Fredoka One',cursive; font-size:1.25rem; color:var(--gold); letter-spacing:0.5px;">CLASH OF CHAMPION</strong>
+                <span class="brand-badge" style="margin-left:6px;">LIVE v2.0</span>
+            </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-small" onclick="openLandingRulesModal()" style="text-decoration:none;">📜 Aturan Game</button>
+            <div style="display:flex; align-items:center; gap:6px; font-size:0.85rem; color:rgba(255,255,255,0.8); background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.4); padding:4px 12px; border-radius:20px;">
+                <span style="width:8px; height:8px; border-radius:50%; background:#4caf50; display:inline-block; box-shadow:0 0 8px #4caf50;"></span>
+                <span>Server Siap</span>
+            </div>
+            <a href="login.html" class="btn btn-secondary btn-small" style="text-decoration:none;">🔑 Masuk Portal Guru</a>
+        </div>
+    </header>
+
+    <div class="container hero" style="position:relative; z-index:10; max-width:1100px;">
+        <!-- HERO MAIN PRESENTATION -->
+        <div class="hero-content">
+            <div class="hero-pill-badge">
+                <span>🏆</span>
+                <span>Kuis Edukasi Multiplayer Real-Time Nomor 1</span>
+            </div>
+
+            <h1 class="hero-title-main">CLASH OF CHAMPION</h1>
+            <p class="hero-subtitle-lead">
+                Adu kecepatan dan ketepatan menjawab kotak soal bersama teman sekelasmu secara live! Rebut kotak soal tercepat, raih skor tertinggi, dan pimpin leaderboard!
+            </p>
+
+            <div class="feature-pills-row">
+                <div class="feature-pill-tag">⚡ First-Come First-Served Locking</div>
+                <div class="feature-pill-tag">🛡️ Anti-Cheat Authoritative</div>
+                <div class="feature-pill-tag">⚔️ Pixel Art Champion Avatars</div>
+                <div class="feature-pill-tag">📊 4 Tipe Soal Interaktif</div>
+            </div>
+
+            <div id="action-buttons" class="button-group" style="margin-top:10px;">
+                <button id="btn-show-join" class="btn btn-primary btn-large bounce" style="font-size:1.35rem; padding:16px 36px; box-shadow:0 0 25px rgba(255,215,0,0.5);">
+                    ⚔️ GABUNG PERMAINAN (SISWA)
+                </button>
+                <button id="btn-admin" class="btn btn-secondary btn-large" style="padding:16px 28px;">
+                    👨‍🏫 Portal Guru & Admin
+                </button>
+            </div>
+        </div>
+
+        <!-- JOIN GAME SECTION CARD (GLASSMORPHISM) -->
+        <div id="join-section" class="card glass-join-card hidden slideDown" style="max-width: 540px; margin: 0 auto;">
+            <div class="flex-between mb-3">
+                <h2 style="font-size:1.4rem; color:var(--gold); margin:0;">🎮 Masuk ke Permainan</h2>
+                <button type="button" onclick="document.getElementById('join-section').classList.add('hidden'); document.getElementById('action-buttons').classList.remove('hidden');" class="btn btn-secondary btn-small" style="padding:2px 8px;">✕</button>
+            </div>
+
+            <div class="modal-tabs mb-3" style="background:rgba(0,0,0,0.35); border-radius:10px; padding:4px;">
+                <button type="button" id="tab-student-anon" class="modal-tab-btn active" onclick="switchStudentMode('anon')">⚡ Mode Cepat (Anonim)</button>
+                <button type="button" id="tab-student-account" class="modal-tab-btn" onclick="switchStudentMode('account')">🎓 Akun Siswa Terdaftar</button>
+            </div>
+
+            <!-- ANONYMOUS GUEST FIELDS (REQUIRES PIN & NICKNAME) -->
+            <div id="anon-fields-group">
+                <div class="form-group">
+                    <label>PIN Room (6 Digit)</label>
+                    <div class="pin-inputs" id="pin-container">
+                        <input type="text" maxlength="1" class="pin-box" data-index="0">
+                        <input type="text" maxlength="1" class="pin-box" data-index="1">
+                        <input type="text" maxlength="1" class="pin-box" data-index="2">
+                        <input type="text" maxlength="1" class="pin-box" data-index="3">
+                        <input type="text" maxlength="1" class="pin-box" data-index="4">
+                        <input type="text" maxlength="1" class="pin-box" data-index="5">
+                    </div>
+                    <div id="player-count-indicator" style="margin-top:5px;font-size:0.9rem;color:var(--gold);"></div>
+                </div>
+                
+                <div id="anon-nickname-group" class="form-group">
+                    <label>Nickname / Nama Panggilan</label>
+                    <input type="text" id="nickname" maxlength="15" placeholder="Masukkan namamu..." class="input-text">
+                </div>
+            </div>
+
+            <!-- REGISTERED STUDENT FIELDS (NO PIN REQUIRED - AUTO DETECT GURU QUIZ) -->
+            <div id="account-login-group" class="hidden">
+                <div id="student-logged-box" class="card mb-3 hidden" style="background:rgba(76,175,80,0.12); border:1px solid #4caf50; padding:12px 14px;">
+                    <div class="flex-between">
+                        <div>
+                            <strong id="logged-student-name" style="color:#81c784; font-size:1.05rem;">Nama Siswa</strong>
+                            <div id="logged-student-meta" style="font-size:0.85rem; color:var(--text-muted);">NIS: 1001 | Kelas: 7A</div>
+                        </div>
+                        <button type="button" onclick="logoutStudent()" class="btn btn-secondary btn-small" style="font-size:0.75rem; padding:3px 8px;">Ganti Akun</button>
+                    </div>
+                </div>
+
+                <!-- ACTIVE ROOMS DETECTED FOR REGISTERED STUDENTS -->
+                <div id="student-active-room-box" class="mb-3">
+                    <div class="card" style="background:rgba(255,255,255,0.05); border:1px dashed rgba(255,255,255,0.2); padding:10px; text-align:center;">
+                        <span style="font-size:0.85rem; color:var(--text-muted);">Mencari kuis yang sedang aktif...</span>
+                    </div>
+                </div>
+
+                <div id="student-login-inputs">
+                    <div class="form-group">
+                        <label>NIS (Nomor Induk Siswa)</label>
+                        <input type="text" id="student-nis-input" class="input-text" placeholder="Contoh: 1001">
+                    </div>
+                    <div class="form-group">
+                        <label>Password Siswa</label>
+                        <input type="password" id="student-pass-input" class="input-text" placeholder="Default: 123">
+                    </div>
+                    <button type="button" id="btn-verify-student" onclick="verifyStudentAccount()" class="btn btn-secondary btn-full btn-small mb-3">Login Siswa & Cari Kuis Aktif ✓</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Pilih Champion / Avatar</label>
+                
+                <div class="modal-tabs" style="margin-bottom: 12px;">
+                    <button type="button" id="tab-avatar-sprite" class="modal-tab-btn active" onclick="switchAvatarTab('sprite')">⚔️ Sprite Champion</button>
+                    <button type="button" id="tab-avatar-emoji" class="modal-tab-btn" onclick="switchAvatarTab('emoji')">🦁 Emoji Klasik</button>
+                </div>
+
+                <!-- SPRITE BUILDER SECTION -->
+                <div id="sprite-builder-section" class="sprite-builder-card">
+                    <div class="sprite-preview-area">
+                        <div id="sprite-preview-canvas-wrap" class="sprite-canvas-large-wrap"></div>
+                        <div class="sprite-preview-meta">
+                            <h3 id="sprite-class-name" class="glow-gold" style="margin-bottom:2px;">Ksatria</h3>
+                            <div id="sprite-palette-name" style="font-size:0.85rem; opacity:0.85; margin-bottom:8px;">Tema: Emas Juara</div>
+                            <button type="button" id="btn-random-sprite" class="btn btn-secondary btn-small bounce">🎲 Acak Champion</button>
+                        </div>
+                    </div>
+
+                    <!-- Class Selectors -->
+                    <div class="sprite-controls mt-2">
+                        <div style="font-size:0.85rem; font-weight:bold; margin-bottom:5px;">Pilih Kelas:</div>
+                        <div id="class-buttons-grid" class="class-buttons-grid"></div>
+                    </div>
+
+                    <!-- Palette Selectors -->
+                    <div class="sprite-controls mt-2">
+                        <div style="font-size:0.85rem; font-weight:bold; margin-bottom:5px;">Tema Warna & Elemen:</div>
+                        <div id="palette-buttons-grid" class="palette-buttons-grid"></div>
+                    </div>
+                </div>
+
+                <!-- EMOJI PICKER SECTION (ALTERNATIVE) -->
+                <div id="emoji-picker-section" class="hidden">
+                    <div class="avatar-picker avatar-grid-large" id="avatar-picker">
+                        <!-- Avatars injected by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <button id="btn-join" class="btn btn-primary btn-full btn-large" style="box-shadow:0 0 20px rgba(255,215,0,0.4);" disabled>MASUK KE GAME ⚔️</button>
+            <div id="join-error" class="error-text hidden"></div>
+
+            <div class="mt-3 text-center">
+                <button type="button" onclick="openStudentHistoryModal()" style="background:none; border:none; color:var(--gold); font-size:0.88rem; cursor:pointer; text-decoration:underline;">📊 Cek Riwayat & Rapor Kuis Siswa (NIS)</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="hidden text-center" style="margin-top:30px;">
+            <div class="spinner"></div>
+            <p style="margin-top:12px; font-weight:bold; font-size:1.1rem; color:var(--gold);">Menghubungkan ke Arena Pertandingan...</p>
+        </div>
+
+        <!-- THREE HIGHLIGHT FEATURES CARDS -->
+        <div class="hero-features-grid">
+            <div class="feature-card">
+                <div class="feature-icon-bubble">⚡</div>
+                <h3 style="color:var(--gold); font-size:1.15rem; margin-bottom:6px;">Multiplayer Real-Time</h3>
+                <p style="font-size:0.88rem; color:rgba(255,255,255,0.75); line-height:1.5;">
+                    Kotak soal terkunci secara atomik saat diklik pemain pertama. Tidak akan ada dua pemain yang mengerjakan soal yang sama secara bersamaan!
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon-bubble">🎮</div>
+                <h3 style="color:var(--gold); font-size:1.15rem; margin-bottom:6px;">4 Tipe Soal Menantang</h3>
+                <p style="font-size:0.88rem; color:rgba(255,255,255,0.75); line-height:1.5;">
+                    Mendukung Pilihan Ganda (PG), Benar/Salah (T/F), Menjodohkan Pasangan (Matching), dan Isian Singkat. Guru bisa upload langsung dari Excel atau Word!
+                </p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon-bubble">🔥</div>
+                <h3 style="color:var(--gold); font-size:1.15rem; margin-bottom:6px;">Kombo & Leaderboard Live</h3>
+                <p style="font-size:0.88rem; color:rgba(255,255,255,0.75); line-height:1.5;">
+                    Raih bonus kecepatan dan streak kombo hingga x2.0. Skor bergerak naik turun secara dinamis dengan podium juara dan efek animasi interaktif.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CEK RAPOR SISWA -->
+    <div id="modal-student-history" class="modal hidden">
+        <div class="modal-content card" style="max-width: 600px;">
+            <div class="flex-between mb-2">
+                <h2 style="color:var(--gold);">📊 Rapor & Riwayat Kuis Siswa</h2>
+                <button onclick="closeStudentHistoryModal()" class="btn btn-secondary btn-small">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Masukkan NIS untuk melihat riwayat skor, akurasi, dan peringkat yang pernah Anda raih.</p>
+
+            <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <input type="text" id="check-history-nis" placeholder="Masukkan NIS Siswa (misal: 1001)..." class="input-text" style="flex:1;">
+                <button onclick="fetchStudentHistory()" class="btn btn-primary btn-small">Cek Riwayat</button>
+            </div>
+
+            <div id="student-history-result" style="max-height:280px; overflow-y:auto;">
+                <p class="text-center" style="color:var(--text-muted); padding:10px;">Silakan masukkan NIS dan klik Cek Riwayat.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- MODAL ATURAN PERMAINAN -->
+    <div id="modal-landing-rules" class="modal full-modal hidden">
+        <div class="modal-content card" style="max-width: 650px; max-height: 85vh; overflow-y: auto;">
+            <div class="flex-between mb-2">
+                <h2 style="color:var(--gold); font-size:1.35rem; margin:0;">📜 Aturan & Cara Bermain</h2>
+                <button type="button" class="btn btn-small btn-secondary" onclick="closeLandingRulesModal()">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.88rem; color:rgba(255,255,255,0.8); margin-bottom:14px;">
+                Pelajari aturan main untuk mendominasi arena kuis Clash of Champion:
+            </p>
+
+            <div style="display:grid; gap:12px; text-align:left;">
+                <div style="background:rgba(255,255,255,0.06); padding:14px; border-radius:12px; border-left:4px solid #ffbe0b;">
+                    <strong style="color:#ffbe0b; font-size:0.95rem;">⚡ 1. Rebutan Kotak Tercepat (Atomic Lock)</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:3px; line-height:1.45;">
+                        Pemain yang mengklik kotak tercepat berhak menjawab soal. Kotak terkunci seketika agar pemain lain tidak bisa mengambilnya!
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:14px; border-radius:12px; border-left:4px solid #38bdf8;">
+                    <strong style="color:#38bdf8; font-size:0.95rem;">🔢 2. Nomor Urut Kotak (Pilih Nomor)</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:3px; line-height:1.45;">
+                        Kotak menampilkan nomor urut (1, 2, 3...). Nilai poin soal akan terungkap saat kamu membuka nomor kotak tersebut.
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:14px; border-radius:12px; border-left:4px solid #10b981;">
+                    <strong style="color:#a7f3d0; font-size:0.95rem;">⏱️ 3. Berpacu dengan Waktu</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:3px; line-height:1.45;">
+                        Selesaikan soal sebelum waktu habis. Jika kehabisan waktu, kotak otomatis dilepas kembali ke arena kuis.
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:14px; border-radius:12px; border-left:4px solid #f59e0b;">
+                    <strong style="color:#fde68a; font-size:0.95rem;">🔥 4. Kombo Beruntun & Podium</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:3px; line-height:1.45;">
+                        Pertahankan jawaban benar beruntun untuk melipatgandakan poin kuis hingga x2.0 dan rebut posisi podium teratas!
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <button type="button" class="btn btn-primary btn-full" onclick="closeLandingRulesModal()">Siap Main Sekarang! 🎮</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/three.min.js"></script>
+    <script src="js/hero-scene.js"></script>
+    <script src="js/sounds.js"></script>
+    <script src="js/sprite-gen.js"></script>
+    <script src="js/join.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+services:
+  clash-of-champion:
+    build: .
+    container_name: clash-of-champion
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - DATA_DIR=/app/data
+    volumes:
+      - clash_data:/app/data
+
+volumes:
+  clash_data:

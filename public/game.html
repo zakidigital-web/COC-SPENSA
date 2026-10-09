@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game - Clash of Champion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="game-body">
+    <!-- THREE.JS 3D IN-GAME BATTLE ARENA -->
+    <div id="game-three-canvas" class="game-three-canvas"></div>
+    <div id="game-three-overlay" class="game-three-overlay"></div>
+
+    <div id="combo-popup" class="combo-popup hidden">🔥 COMBO x<span id="combo-count"></span>!</div>
+    <div id="score-float" class="score-float hidden"></div>
+    <div id="reconnecting-overlay" class="reconnecting-overlay hidden">Menghubungkan ulang...</div>
+
+    <!-- WAITING ROOM OVERLAY -->
+    <div id="waiting-room" class="overlay flex-center">
+        <div class="card text-center slideUp glass-card" style="max-width:620px; width:92%; margin:16px; max-height:90vh; overflow-y:auto;">
+            <div style="font-size:2.6rem; margin-bottom:4px;">⚔️</div>
+            <h2 style="color:var(--gold); font-size:1.5rem; margin-bottom:4px;">Ruang Tunggu Battle Arena</h2>
+            <p style="font-size:0.9rem; color:rgba(255,255,255,0.85); margin-bottom:12px;">
+                Kuis akan dimulai serentak saat guru menekan tombol <strong>Mulai Game</strong>.
+            </p>
+            
+            <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,215,0,0.3); border-radius:14px; padding:8px 18px; margin-bottom:14px; display:inline-flex; align-items:center; gap:16px;">
+                <div>
+                    <span style="font-size:0.75rem; color:var(--gold); font-weight:bold; letter-spacing:1px; display:block;">PIN ROOM</span>
+                    <strong id="lobby-pin-display" style="font-size:1.3rem; color:#fff; font-family:'Fredoka One';">------</strong>
+                </div>
+                <div style="width:1px; height:26px; background:rgba(255,255,255,0.15);"></div>
+                <div>
+                    <span style="font-size:0.75rem; color:var(--gold); font-weight:bold; letter-spacing:1px; display:block;">STATUS</span>
+                    <span class="badge" style="background:#10b981; color:white; font-size:0.78rem; padding:2px 8px; border-radius:10px;">Menunggu Guru</span>
+                </div>
+            </div>
+
+            <div class="spinner" style="margin:4px auto 12px auto;"></div>
+
+            <div style="background:rgba(0,0,0,0.25); border-radius:14px; padding:12px 14px; border:1px solid rgba(255,255,255,0.1);">
+                <div class="flex-between mb-2" style="border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:6px;">
+                    <h3 style="font-size:1.05rem; color:var(--gold); margin:0;">
+                        👥 Teman yang Sudah Masuk (<span id="lobby-player-count">0</span> Siswa):
+                    </h3>
+                    <span style="font-size:0.75rem; color:rgba(255,255,255,0.6);">Live update</span>
+                </div>
+                <div id="waiting-players" class="player-grid" style="min-height:80px; max-height:220px; overflow-y:auto; padding:4px 0;"></div>
+            </div>
+
+            <!-- PANDUAN ATURAN GAME SISWA -->
+            <div class="waiting-rules-card mt-3">
+                <div class="waiting-rules-toggle" onclick="toggleWaitingRules()">
+                    <span>📜 Tata Cara & Aturan Bermain Arena</span>
+                    <span id="waiting-rules-arrow">▼</span>
+                </div>
+                <div id="waiting-rules-content" class="waiting-rules-content hidden">
+                    <ul class="waiting-rules-list">
+                        <li class="waiting-rules-item">
+                            <span class="waiting-rules-icon">⚡</span>
+                            <div><strong>Rebutan Kotak Cepat:</strong> Klik kotak kuis secepat mungkin! Pemain pertama yang klik akan mengunci kotak tersebut untuk dijawab.</div>
+                        </li>
+                        <li class="waiting-rules-item">
+                            <span class="waiting-rules-icon">🔢</span>
+                            <div><strong>Pilih Nomor Kotak:</strong> Kotak menampilkan nomor urut besar (1, 2, 3...). Poin soal akan terungkap saat kotak dibuka!</div>
+                        </li>
+                        <li class="waiting-rules-item">
+                            <span class="waiting-rules-icon">⏱️</span>
+                            <div><strong>Perhatikan Timer:</strong> Jawab sebelum hitungan mundur habis agar kotak tidak lepas kembali ke teman sekelasmu.</div>
+                        </li>
+                        <li class="waiting-rules-item">
+                            <span class="waiting-rules-icon">🔥</span>
+                            <div><strong>Raih Kombo Juara:</strong> Jawab benar berturut-turut untuk melipatgandakan perolehan poin kombo!</div>
+                        </li>
+                        <li class="waiting-rules-item">
+                            <span class="waiting-rules-icon">🏆</span>
+                            <div><strong>Puncaki Klasemen:</strong> Kumpulkan poin setinggi-tingginya dan raih podium juara 1, 2, atau 3!</div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN GAME UI -->
+    <div id="game-ui" class="game-container hidden">
+        <header class="game-header">
+            <div class="header-left">
+                <div class="brand">⚔️ COC <button id="mute-btn" class="mute-btn" title="Suara">🔊</button></div>
+                <button id="btn-show-rules" class="btn btn-secondary btn-small" onclick="openStudentRulesModal()" title="Lihat Aturan Game">📜 <span class="hide-on-mobile">Aturan</span></button>
+                <button id="btn-toggle-lb" class="btn btn-secondary btn-small lb-toggle-btn" onclick="toggleMobileLeaderboard()">🏆 <span class="hide-on-mobile">Klasemen</span></button>
+            </div>
+
+            <div class="progress-container">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <span id="progress-text" style="font-size:0.85rem; font-weight:bold;">0 / 0</span>
+            </div>
+
+            <div id="header-match-timer" class="match-timer-badge hidden" title="Sisa Waktu Kuis">
+                ⏳ <span id="match-timer-val">--:--</span>
+            </div>
+
+            <div class="player-info">
+                <span id="my-avatar" class="avatar-small"></span>
+                <span id="my-nickname" class="nickname-truncate">Player</span>
+                <div class="score-badge">
+                    ⭐ <span id="my-score">0</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="game-content">
+            <main class="grid-area">
+                <div id="box-grid" class="box-grid game-box-grid"></div>
+            </main>
+            
+            <aside id="leaderboard-sidebar" class="leaderboard-sidebar">
+                <div class="card h-full glass-card">
+                    <div class="flex-between mb-2">
+                        <h3 style="color:var(--gold); margin:0; font-size:1.1rem;">🏆 Klasemen Live</h3>
+                        <button class="btn btn-secondary btn-small hide-on-desktop" onclick="toggleMobileLeaderboard()" style="padding:2px 8px;">✕ Tutup</button>
+                    </div>
+                    <div id="game-leaderboard" class="leaderboard-list"></div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- EMOTE BAR DOCK -->
+        <div class="emote-bar">
+            <button class="emote-btn bounce" onclick="sendEmote('👏')">👏</button>
+            <button class="emote-btn bounce" onclick="sendEmote('😂')">😂</button>
+            <button class="emote-btn bounce" onclick="sendEmote('😱')">😱</button>
+            <button class="emote-btn bounce" onclick="sendEmote('🔥')">🔥</button>
+        </div>
+    </div>
+
+    <!-- QUESTION MODAL -->
+    <div id="question-modal" class="modal full-modal hidden">
+        <div class="modal-content card game-q-card glass-modal">
+            <div class="q-header">
+                <div class="timer-circle">
+                    <svg viewBox="0 0 36 36" class="circular-chart">
+                        <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        <path id="timer-path" class="circle" stroke-dasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                    </svg>
+                    <div id="timer-text" class="timer-text">30</div>
+                </div>
+                <div id="q-box-badge" class="badge" style="background:var(--gold); color:#111; font-weight:bold; font-size:1.05rem; padding:4px 12px; border-radius:8px;">Kotak #1</div>
+                <div id="q-sprite-hero-container" class="q-sprite-hero-container"></div>
+                <div class="points-badge glow-gold">⭐ <span id="q-modal-points">100</span></div>
+            </div>
+            
+            <h2 id="q-text-display" class="q-text">Pertanyaan...</h2>
+            
+            <div id="q-interactive-area" class="q-area"></div>
+            
+            <div class="q-footer hidden" id="q-footer-submit">
+                <button id="btn-submit-answer" class="btn btn-primary btn-large btn-full">KIRIM JAWABAN</button>
+                <button id="btn-reset-match" class="btn btn-secondary btn-small hidden mt-2">Reset Pasangan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAUSE OVERLAY -->
+    <div id="pause-overlay" class="overlay flex-center hidden">
+        <div class="card text-center glass-card" style="max-width:400px; padding:30px;">
+            <div style="font-size:3rem; margin-bottom:10px;">⏸️</div>
+            <h1 style="color:var(--gold); font-size:1.6rem; margin-bottom:8px;">GAME DIJEDA</h1>
+            <p style="color:rgba(255,255,255,0.8);">Guru sedang menjeda permainan untuk sementara waktu.</p>
+        </div>
+    </div>
+
+    <div id="emotes-container" class="emotes-container"></div>
+    <div id="toast-container" class="toast-container"></div>
+    <svg id="lines-layer" class="lines-layer"></svg>
+
+    <!-- MODAL ATURAN PERMAINAN SISWA -->
+    <div id="modal-student-rules" class="modal full-modal hidden">
+        <div class="modal-content card" style="max-width: 580px; max-height: 85vh; overflow-y: auto;">
+            <div class="flex-between mb-2">
+                <h2 style="color:var(--gold); font-size:1.3rem; margin:0;">📜 Aturan & Cara Bermain Arena</h2>
+                <button type="button" class="btn btn-small btn-secondary" onclick="closeStudentRulesModal()">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.85rem; color:rgba(255,255,255,0.75); margin-bottom:14px;">
+                Panduan singkat menjuarai kuis Clash of Champion:
+            </p>
+
+            <div style="display:grid; gap:12px; text-align:left;">
+                <div style="background:rgba(255,255,255,0.06); padding:12px; border-radius:10px; border-left:4px solid #ffbe0b;">
+                    <strong style="color:#ffbe0b;">⚡ 1. Rebutan Kotak Cepat</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:2px;">
+                        Setiap kotak hanya bisa dikerjakan 1 siswa dalam 1 waktu. Klik kotak yang berstatus hijau (Tersedia) secepatnya!
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:12px; border-radius:10px; border-left:4px solid #38bdf8;">
+                    <strong style="color:#38bdf8;">🔢 2. Nomor Urut & Nilai Soal</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:2px;">
+                        Pilih nomor kotak favoritmu (1, 2, 3...). Poin soal akan langsung terungkap saat kamu membuka soal.
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:12px; border-radius:10px; border-left:4px solid #10b981;">
+                    <strong style="color:#a7f3d0;">⏱️ 3. Pacu Waktu</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:2px;">
+                        Jawab sebelum timer lingkaran habis agar soalmu tidak otomatis dilepas kembali ke arena.
+                    </div>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); padding:12px; border-radius:10px; border-left:4px solid #f59e0b;">
+                    <strong style="color:#fde68a;">🔥 4. Kombo Beruntun</strong>
+                    <div style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin-top:2px;">
+                        Menjawab benar berkali-kali tanpa salah memberikan pengali skor kombo ekstra!
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 text-center">
+                <button type="button" class="btn btn-primary btn-full" onclick="closeStudentRulesModal()">Siap Bertanding! ⚔️</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/three.min.js"></script>
+    <script src="js/game-scene.js?v=20260929b"></script>
+    <script src="js/sounds.js?v=20260929b"></script>
+    <script src="js/sprite-gen.js?v=20260929b"></script>
+
+    <!-- Global error handler to log any script errors visually -->
+    <script>
+    window.onerror = function(msg, url, line, col, err) {
+        console.error('[GAME PAGE ERROR]', msg, 'at', url, ':', line);
+        // Show error visually for debugging
+        var toast = document.getElementById('toast-container');
+        if (toast) {
+            var el = document.createElement('div');
+            el.className = 'toast error';
+            el.textContent = 'Error: ' + msg;
+            toast.appendChild(el);
+            setTimeout(function() { el.remove(); }, 5000);
+        }
+    };
+    </script>
+
+    <script src="js/game.js?v=20260929b"></script>
+</body>
+</html>

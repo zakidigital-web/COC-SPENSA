@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: clash-of-champion
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    disk:
+      name: clash-sqlite-data
+      mountPath: /app/data
+      sizeGB: 1

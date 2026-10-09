@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Clash of Champion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="guru-role-bar" class="role-banner" style="background: rgba(0,0,0,0.5); border-bottom: 2px solid var(--gold); padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; flex-wrap: wrap; gap: 8px;">
+        <div id="guru-status-text" style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1.2rem;">⚡</span>
+            <span><strong>Mode Guru Cepat (Anonim):</strong> Progres nilai siswa tidak disimpan ke database permanen.</span>
+        </div>
+        
+        <!-- PERSISTENT PIN BADGE IN HEADER -->
+        <div id="admin-pin-banner" class="admin-pin-banner" style="background:rgba(255,190,11,0.18); border:2px solid var(--gold); border-radius:12px; padding:4px 12px; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:0.75rem; color:var(--gold); font-weight:bold; letter-spacing:0.5px;">PIN ROOM:</span>
+            <strong id="header-room-pin" class="display-room-pin" style="font-size:1.3rem; color:#ffbe0b; font-family:'Fredoka One'; letter-spacing:2px; cursor:pointer;" onclick="copyPin()" title="Klik untuk salin PIN">------</strong>
+            <button type="button" onclick="copyPin()" class="btn btn-secondary btn-small" style="padding:2px 8px; font-size:0.75rem;">📋 Salin</button>
+            <button type="button" onclick="createNewRoom()" class="btn btn-secondary btn-small" title="Buat PIN / Room baru" style="padding:2px 8px; font-size:0.75rem;">🔄 Baru</button>
+        </div>
+
+        <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btn-open-bank" onclick="openBankModal()" class="btn btn-secondary btn-small">📚 Bank Soal</button>
+            <button id="btn-open-reports" onclick="openReportsModal()" class="btn btn-secondary btn-small">📊 Rekap Nilai & Laporan</button>
+            <button id="btn-auth-action" onclick="handleAuthAction()" class="btn btn-primary btn-small">🔑 Login Akun Guru</button>
+        </div>
+    </div>
+
+    <div id="phase-setup" class="container admin-container" style="max-width: 1050px;">
+        <!-- WIZARD STEP NAVIGATION BAR -->
+        <div class="wizard-nav">
+            <button type="button" id="wizard-tab-1" class="wizard-step-tab active" onclick="setWizardStep(1)">
+                <span>1️⃣</span> <span>1. Sumber Soal</span>
+            </button>
+            <button type="button" id="wizard-tab-2" class="wizard-step-tab" onclick="setWizardStep(2)">
+                <span>2️⃣</span> <span>2. Aturan Permainan</span>
+            </button>
+            <button type="button" id="wizard-tab-3" class="wizard-step-tab" onclick="setWizardStep(3)">
+                <span>3️⃣</span> <span>3. Ruang Tunggu (PIN: <span id="nav-room-pin" class="display-room-pin" style="color:#ffbe0b;">------</span>)</span>
+            </button>
+        </div>
+
+        <!-- STEP 1: SUMBER SOAL -->
+        <div id="step-panel-1" class="wizard-step-panel">
+            <!-- QUICK PIN NOTICE CARD ON STEP 1 -->
+            <div class="card mb-3" style="background:rgba(255,190,11,0.1); border:1px solid rgba(255,215,0,0.3); border-radius:14px; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <span style="font-size:1.8rem;">🔑</span>
+                    <div>
+                        <span style="font-size:0.75rem; color:var(--gold); font-weight:bold; letter-spacing:0.5px; display:block;">KODE PIN ROOM KUIS ANDA:</span>
+                        <strong class="display-room-pin" style="font-size:1.6rem; color:#ffbe0b; font-family:'Fredoka One'; letter-spacing:2px; cursor:pointer;" onclick="copyPin()">------</strong>
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" onclick="copyPin()" class="btn btn-secondary btn-small">📋 Salin PIN</button>
+                    <button type="button" onclick="copyJoinLink()" class="btn btn-secondary btn-small">🔗 Salin Link Siswa</button>
+                    <button type="button" onclick="setWizardStep(3)" class="btn btn-primary btn-small">Lihat Siswa Masuk →</button>
+                </div>
+            </div>
+
+            <div class="wizard-step-card">
+                <div class="flex-between mb-3" style="flex-wrap:wrap; gap:8px;">
+                    <div>
+                        <h2 style="color:var(--gold); margin:0;">📚 Langkah 1: Siapkan Soal Kuis</h2>
+                        <p style="font-size:0.9rem; color:rgba(255,255,255,0.8); margin:4px 0 0 0;">
+                            Pilih cara memasukkan soal ke dalam pertandingan Clash of Champion.
+                        </p>
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button id="btn-guide-format" class="btn btn-secondary btn-small" title="Lihat Petunjuk Penulisan Soal">ℹ️ Format File</button>
+                        <button id="btn-randomize-points" class="btn btn-secondary btn-small" title="Acak Nilai Poin">🎲 Acak Poin</button>
+                    </div>
+                </div>
+
+                <div class="wizard-action-grid">
+                    <div class="wizard-action-card" onclick="document.getElementById('btn-open-upload').click()">
+                        <span class="card-icon">📤</span>
+                        <strong style="font-size:1.1rem; color:var(--gold);">Upload File Excel / Word</strong>
+                        <p style="font-size:0.85rem; margin-top:6px; opacity:0.85;">Unggah template resmi .xlsx atau dokumen .docx dengan sekali klik.</p>
+                        <button id="btn-open-upload" class="btn btn-primary btn-small mt-2">Pilih File Soal</button>
+                    </div>
+
+                    <div class="wizard-action-card" onclick="openBankModal()">
+                        <span class="card-icon">📖</span>
+                        <strong style="font-size:1.1rem; color:#38bdf8;">Pilih dari Bank Soal</strong>
+                        <p style="font-size:0.85rem; margin-top:6px; opacity:0.85;">Gunakan kumpulan paket soal yang pernah disimpan sebelumnya.</p>
+                        <button class="btn btn-secondary btn-small mt-2" style="background:#0284c7;">Buka Bank Soal</button>
+                    </div>
+
+                    <div class="wizard-action-card" onclick="document.getElementById('btn-add-question').click()">
+                        <span class="card-icon">✍️</span>
+                        <strong style="font-size:1.1rem; color:#a7f3d0;">Tulis Soal Manual</strong>
+                        <p style="font-size:0.85rem; margin-top:6px; opacity:0.85;">Ketik pertanyaan pilihan ganda, benar/salah, menjodohkan satu per satu.</p>
+                        <button id="btn-add-question" class="btn btn-success btn-small mt-2">+ Tulis Manual</button>
+                    </div>
+                </div>
+
+                <!-- DAFTAR SOAL TERMUAT -->
+                <div class="mt-4" style="background:rgba(0,0,0,0.25); border-radius:12px; padding:16px;">
+                    <div class="flex-between mb-2">
+                        <h3 style="font-size:1.1rem; margin:0;">📋 Soal yang Siap Dimainkan: <span id="question-count" style="color:var(--gold);">0</span> Soal</h3>
+                    </div>
+                    <div id="question-list" class="question-list" style="max-height:260px;"></div>
+                </div>
+
+                <div class="mt-4 text-right">
+                    <button type="button" class="btn btn-primary btn-large" onclick="setWizardStep(2)" id="btn-to-step-2">
+                        Lanjut ke Aturan Game →
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 2: PENGATURAN ATURAN GAME -->
+        <!-- STEP 2: PENGATURAN ATURAN GAME -->
+        <div id="step-panel-2" class="wizard-step-panel hidden">
+            <div class="wizard-step-card">
+                <div class="flex-between mb-3" style="flex-wrap:wrap; gap:12px;">
+                    <div>
+                        <h2 style="color:var(--gold); margin:0 0 4px 0; font-size:1.45rem;">⚙️ Langkah 2: Aturan Permainan & Parameter Kuis</h2>
+                        <p style="font-size:0.9rem; color:rgba(255,255,255,0.8); margin:0;">
+                            Sesuaikan tempo permainan, batasan waktu, penalti nilai, dan mekanisme kejutan untuk arena kuis.
+                        </p>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-small" onclick="openGameRulesModal()" style="font-size:0.85rem; padding:6px 14px; border-radius:20px; border-color:var(--gold); color:var(--gold);">
+                        📜 Baca Panduan & Aturan
+                    </button>
+                </div>
+
+                <!-- PRESET PILIHAN CEPAT ATURAN GAME -->
+                <div class="rules-preset-bar">
+                    <span class="rules-preset-title">⚡ Preset Mode Kuis:</span>
+                    <button type="button" class="rules-preset-btn active" id="preset-btn-standar" onclick="applyRulePreset('standar')">🎯 Standar (60s)</button>
+                    <button type="button" class="rules-preset-btn" id="preset-btn-kilat" onclick="applyRulePreset('kilat')">⚡ Kilat (30s)</button>
+                    <button type="button" class="rules-preset-btn" id="preset-btn-turnamen" onclick="applyRulePreset('turnamen')">🏆 Turnamen (120s + Penalti)</button>
+                    <button type="button" class="rules-preset-btn" id="preset-btn-santai" onclick="applyRulePreset('santai')">☕ Santai (∞ Bebas)</button>
+                    <button type="button" class="rules-preset-btn" id="preset-btn-misteri" onclick="applyRulePreset('misteri')">🎁 Kotak Misteri</button>
+                </div>
+
+                <div class="rules-grid">
+                    <!-- CARD 1: GLOBAL MATCH TIMER -->
+                    <div class="rules-card global-theme">
+                        <div class="rules-card-header">
+                            <div>
+                                <h3 class="rules-card-title">⌛ Waktu Total Pertandingan</h3>
+                                <p class="rules-card-desc">Durasi hitung mundur seluruh ronde kuis. Permainan selesai otomatis saat waktu habis.</p>
+                            </div>
+                            <span class="badge" style="background:rgba(255,190,11,0.2); color:#fef08a; font-size:0.75rem; padding:3px 10px; border-radius:12px; border:1px solid #ffbe0b;">Ronde Penuh</span>
+                        </div>
+                        <div class="rules-value-display">
+                            <span id="global-time-val" class="rules-big-number" style="color:#ffbe0b;">60</span>
+                            <span id="global-time-unit" class="rules-unit">Detik</span>
+                        </div>
+                        <input type="range" id="global-time-limit" min="0" max="300" step="5" value="60" class="slider" style="width:100%;">
+                        <div class="rules-pills-row">
+                            <button type="button" onclick="setGlobalTimer(30)" class="rules-pill-btn global-pill-btn" data-val="30">30s (Kilat)</button>
+                            <button type="button" onclick="setGlobalTimer(45)" class="rules-pill-btn global-pill-btn" data-val="45">45s (Cepat)</button>
+                            <button type="button" onclick="setGlobalTimer(60)" class="rules-pill-btn global-pill-btn active" data-val="60">60s (Standar)</button>
+                            <button type="button" onclick="setGlobalTimer(90)" class="rules-pill-btn global-pill-btn" data-val="90">90s</button>
+                            <button type="button" onclick="setGlobalTimer(120)" class="rules-pill-btn global-pill-btn" data-val="120">120s (2m)</button>
+                            <button type="button" onclick="setGlobalTimer(0)" class="rules-pill-btn global-pill-btn" data-val="0">∞ Bebas</button>
+                        </div>
+                    </div>
+
+                    <!-- CARD 2: TIME PER QUESTION -->
+                    <div class="rules-card timer-theme">
+                        <div class="rules-card-header">
+                            <div>
+                                <h3 class="rules-card-title">⏱️ Batas Waktu per Kotak Soal</h3>
+                                <p class="rules-card-desc">Waktu berpikir siswa saat mengklaim 1 kotak soal. Kotak dilepas kembali jika kehabisan waktu.</p>
+                            </div>
+                            <span class="badge" style="background:rgba(56,189,248,0.2); color:#38bdf8; font-size:0.75rem; padding:3px 10px; border-radius:12px; border:1px solid #38bdf8;">Per Soal</span>
+                        </div>
+                        <div class="rules-value-display">
+                            <span id="time-val" class="rules-big-number" style="color:#38bdf8;">30</span>
+                            <span class="rules-unit">Detik</span>
+                        </div>
+                        <input type="range" id="time-limit" min="10" max="120" step="5" value="30" class="slider" style="width:100%;">
+                        <div class="rules-pills-row">
+                            <button type="button" onclick="setTimeLimit(15)" class="rules-pill-btn qtime-pill-btn" data-val="15">15s (Kilat)</button>
+                            <button type="button" onclick="setTimeLimit(30)" class="rules-pill-btn qtime-pill-btn active" data-val="30">30s (Standar)</button>
+                            <button type="button" onclick="setTimeLimit(45)" class="rules-pill-btn qtime-pill-btn" data-val="45">45s (Sedang)</button>
+                            <button type="button" onclick="setTimeLimit(60)" class="rules-pill-btn qtime-pill-btn" data-val="60">60s (Santai)</button>
+                        </div>
+                    </div>
+
+                    <!-- CARD 3: PENALTY -->
+                    <div class="rules-card penalty-theme">
+                        <div class="rules-card-header">
+                            <div>
+                                <h3 class="rules-card-title">⚠️ Penalti Pengurangan Nilai</h3>
+                                <p class="rules-card-desc">Jika diaktifkan, poin siswa akan berkurang jika salah menjawab kotak soal yang diklaim.</p>
+                            </div>
+                            <span class="badge" style="background:rgba(239,68,68,0.2); color:#fca5a5; font-size:0.75rem; padding:3px 10px; border-radius:12px; border:1px solid #ef4444;">Tantangan</span>
+                        </div>
+                        <div class="flex-row mb-2" style="align-items:center; gap:12px;">
+                            <label style="font-size:0.95rem; cursor:pointer; color:white; font-weight:600;" for="enable-penalty">Aktifkan Penalti Jawaban Salah?</label>
+                            <input type="checkbox" id="enable-penalty" class="toggle" onchange="togglePenaltyOptions(this)">
+                        </div>
+                        <div id="penalty-group" style="display:none; margin-top:8px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.15);">
+                            <label style="font-size:0.85rem; color:#fca5a5; font-weight:600;">Nilai Pengurangan Poin:</label>
+                            <div style="display:flex; align-items:center; gap:8px; margin-top:4px;">
+                                <input type="number" id="penalty-points" value="50" min="5" max="500" step="5" class="input-text" style="max-width:130px; font-weight:bold; color:#ef4444;" oninput="updateRulesSummaryBadges()">
+                                <div style="display:flex; gap:4px;">
+                                    <button type="button" onclick="setPenaltyPoints(25)" class="rules-pill-btn">-25</button>
+                                    <button type="button" onclick="setPenaltyPoints(50)" class="rules-pill-btn">-50</button>
+                                    <button type="button" onclick="setPenaltyPoints(100)" class="rules-pill-btn">-100</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CARD 4: MODE NILAI ACAK & TERSEMBUNYI (MYSTERY BOX) -->
+                    <div class="rules-card mystery-theme">
+                        <div class="rules-card-header">
+                            <div>
+                                <h3 class="rules-card-title">🎁 Mode Kotak Nilai Misteri</h3>
+                                <p class="rules-card-desc">Nilai poin disembunyikan dan diacak (50 s/d 300 Poin). Siswa melihat ikon 🎁 ? untuk sensasi kejutan!</p>
+                            </div>
+                            <span class="badge" style="background:rgba(168,85,247,0.2); color:#d8b4fe; font-size:0.75rem; padding:3px 10px; border-radius:12px; border:1px solid #a855f7;">Kejutan</span>
+                        </div>
+                        <div class="flex-row mb-2" style="align-items:center; gap:12px;">
+                            <label style="font-size:0.95rem; cursor:pointer; color:white; font-weight:600;" for="enable-mystery-points">Aktifkan Mystery Points?</label>
+                            <input type="checkbox" id="enable-mystery-points" class="toggle" onchange="toggleMysteryOptions(this)">
+                        </div>
+                        <div id="mystery-group" style="display:none; margin-top:8px; padding-top:10px; border-top:1px dashed rgba(255,255,255,0.15);">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="randomize-mystery-values" class="toggle" checked onchange="updateRulesSummaryBadges()">
+                                <span style="font-size:0.85rem; color:white;">Acak nilai poin dinamis (50, 75, 100, 150, 200, 250, 300 Poin)</span>
+                            </label>
+                            <small style="display:block; color:#a78bfa; margin-top:4px;">Guru tetap dapat memantau nilai asli di tabel inspeksi soal.</small>
+                        </div>
+                    </div>
+
+                    <!-- CARD 5: TAMPILAN NOMOR KOTAK & OPSI POIN DIAWAL -->
+                    <div class="rules-card display-theme" style="grid-column: 1 / -1;">
+                        <div class="rules-card-header">
+                            <div>
+                                <h3 class="rules-card-title">🔢 Tampilan Kotak: Nomor Urut Utama (Gaya Game Show)</h3>
+                                <p class="rules-card-desc">
+                                    Secara default kotak menampilkan nomor urut besar (1, 2, 3...) agar siswa mudah memilih nomor kotak. Nilai poin akan terungkap saat nomor dibuka.
+                                </p>
+                            </div>
+                            <span class="badge" style="background:rgba(16,185,129,0.2); color:#a7f3d0; font-size:0.75rem; padding:3px 10px; border-radius:12px; border:1px solid #10b981;">Interaktif</span>
+                        </div>
+                        <div class="flex-between" style="flex-wrap:wrap; gap:12px; background:rgba(0,0,0,0.25); padding:10px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1);">
+                            <div style="font-size:0.88rem; color:rgba(255,255,255,0.9);">
+                                <strong>Pilihan Tampilan:</strong> Centang jika ingin nilai poin sudah terlihat di kotak kuis sejak awal.
+                            </div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                                <input type="checkbox" id="show-points-initially" class="toggle" onchange="updateRulesSummaryBadges()">
+                                <span style="font-size:0.88rem; color:white; font-weight:700;">Tampilkan Nilai Poin di Kotak Sejak Awal</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LIVE RULE SUMMARY BAR -->
+                <div class="rules-summary-bar">
+                    <div class="rules-summary-header">
+                        <span class="rules-summary-title">📋 Ringkasan Parameter Aturan Kuis:</span>
+                        <span style="font-size:0.75rem; color:rgba(255,255,255,0.6);">Siap digunakan untuk membuka ruang tunggu</span>
+                    </div>
+                    <div class="rules-summary-badges-container">
+                        <span class="rule-summary-badge" id="summary-badge-global">⌛ Total: 60s</span>
+                        <span class="rule-summary-badge" id="summary-badge-qtime">⏱️ Per Soal: 30s</span>
+                        <span class="rule-summary-badge" id="summary-badge-penalty">⚠️ Penalti: Nonaktif</span>
+                        <span class="rule-summary-badge" id="summary-badge-mystery">🎁 Mystery: Nonaktif</span>
+                        <span class="rule-summary-badge" id="summary-badge-display">🔢 Kotak: Nomor Urut (Poin Tersembunyi)</span>
+                    </div>
+                </div>
+
+                <div class="flex-between mt-4">
+                    <button type="button" class="btn btn-secondary" onclick="setWizardStep(1)">← Kembali ke Soal</button>
+                    <button type="button" class="btn btn-primary btn-large" onclick="setWizardStep(3)">Buka Ruang Tunggu & Kode PIN →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 3: LOBBY & RUANG TUNGGU SISWA -->
+        <div id="step-panel-3" class="wizard-step-panel hidden">
+            <div class="wizard-step-card text-center">
+                <span class="badge" style="background:rgba(16,185,129,0.2); border:1px solid #10b981; color:#a7f3d0; padding:4px 16px; border-radius:20px; font-weight:bold;">
+                    ● LOBBY BATTLE ARENA TERBUKA
+                </span>
+
+                <h3 style="margin-top:12px; color:rgba(255,255,255,0.9);">Beritahu Siswa untuk Membuka Website & Masukkan PIN:</h3>
+                
+                <div style="background:rgba(0,0,0,0.3); border:2px dashed var(--gold); border-radius:18px; padding:16px 24px; display:inline-block; margin:12px auto; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+                    <div style="font-size:0.9rem; color:var(--gold); font-weight:bold; letter-spacing:1px;">KODE PIN ROOM:</div>
+                    <h1 id="room-pin" class="huge-pin" style="margin:4px 0; color:#ffbe0b;" onclick="copyPin()">------</h1>
+                    <div style="display:flex; gap:10px; justify-content:center; margin-top:8px;">
+                        <button type="button" onclick="copyPin()" class="btn btn-secondary btn-small">📋 Salin PIN</button>
+                        <button type="button" onclick="copyJoinLink()" class="btn btn-secondary btn-small">🔗 Salin Link Siswa</button>
+                    </div>
+                </div>
+
+                <!-- PILIHAN MODE MANDIRI GURU (TANPA SISWA) -->
+                <div class="card mt-3 text-left" style="background: rgba(14, 165, 233, 0.12); border: 2px solid #0284c7; border-radius: 14px; padding: 14px 18px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+                        <div style="flex:1; min-width:260px;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <span style="font-size:1.3rem;">🎯</span>
+                                <strong style="font-size:1.1rem; color:#38bdf8;">Mode Mandiri Guru (Layar Proyektor / Tanpa HP Siswa)</strong>
+                            </div>
+                            <p style="font-size:0.85rem; color:rgba(255,255,255,0.85); margin:4px 0 0 0;">
+                                Tidak perlu siswa login via HP/laptop. Guru mengoperasikan seluruh kuis langsung dari layar ini, membuka kotak soal, membahas bersama kelas, dan menandai jawaban benar/salah.
+                            </p>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; background:rgba(0,0,0,0.3); padding:8px 14px; border-radius:10px; border:1px solid rgba(56,189,248,0.5);">
+                                <input type="checkbox" id="toggle-solo-mode" class="toggle" style="width:20px; height:20px; cursor:pointer;" onchange="handleSoloModeToggle(this)">
+                                <span style="font-weight:bold; color:#ffbe0b; font-size:0.95rem;">Aktifkan Mode Mandiri</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DAFTAR SISWA MASUK -->
+                <div class="card mt-3 text-left" style="background:rgba(0,0,0,0.25);">
+                    <div class="flex-between mb-2">
+                        <h3 style="font-size:1.15rem; color:var(--gold); margin:0;">
+                            👥 Siswa yang Sudah Masuk (<span id="player-count">0</span> Siswa)
+                        </h3>
+                        <span style="font-size:0.85rem; color:rgba(255,255,255,0.7);">Siswa otomatis muncul di bawah jika join via PIN</span>
+                    </div>
+                    <div id="player-list" class="player-grid" style="min-height:80px; padding:10px 0;"></div>
+                </div>
+
+                <div class="flex-between mt-4" style="flex-wrap:wrap; gap:12px;">
+                    <button type="button" class="btn btn-secondary" onclick="setWizardStep(2)">← Ubah Aturan</button>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                        <button type="button" id="btn-start-solo" class="btn btn-secondary btn-large" onclick="startSoloModeDirectly()" style="background:#0284c7; border-color:#38bdf8;">
+                            🎯 Mulai Mode Mandiri (Guru)
+                        </button>
+                        <button id="btn-start-game" class="btn btn-primary btn-large pulse" style="font-size:1.4rem; padding:18px 48px;" disabled>
+                            MULAI GAME SEKARANG! 🚀
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phase-monitor" class="container admin-container hidden">
+        <div class="monitor-header flex-between mb-3" style="background:rgba(0,0,0,0.4); padding:12px 20px; border-radius:16px;">
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <h2 style="margin:0; color:var(--gold);">🎮 Dashboard Live</h2>
+                <div class="timer-display" id="global-timer">00:00</div>
+                <span id="solo-mode-indicator" class="badge hidden" style="background:rgba(56,189,248,0.2); border:1px solid #38bdf8; color:#38bdf8; font-size:0.85rem; padding:4px 10px; border-radius:12px;">
+                    🎯 Mode Mandiri Guru
+                </span>
+                <span id="solo-score-badge" class="badge hidden" style="background:rgba(255,190,11,0.2); border:1px solid #ffbe0b; color:#ffbe0b; font-size:0.9rem; padding:4px 12px; border-radius:12px;">
+                    Skor: <strong id="admin-solo-score">0</strong> Poin
+                </span>
+            </div>
+            
+            <!-- IN-GAME HITL EMERGENCY COMMAND BAR -->
+            <div class="in-game-command-bar">
+                <button id="btn-pause" class="btn btn-secondary btn-emergency" onclick="togglePauseGame()">⏸️ Pause</button>
+                <button id="btn-extend-time" class="btn btn-secondary btn-emergency" onclick="extendGameTime()" title="Tambah 30 Detik Waktu">+30s Waktu</button>
+                <button id="btn-void-box" class="btn btn-secondary btn-emergency" onclick="promptVoidBox()" title="Batalkan Soal Bermasalah">⚠️ Batalkan Soal</button>
+                <button id="btn-end" class="btn btn-danger btn-emergency">🛑 AKHIRI GAME</button>
+            </div>
+        </div>
+
+        <!-- HINT BANNER OPERASI KOTAK GURU -->
+        <div class="card mb-3" style="background:rgba(0,0,0,0.3); border:1px dashed var(--gold); border-radius:12px; padding:10px 16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:1.3rem;">💡</span>
+                <span style="font-size:0.9rem; color:rgba(255,255,255,0.9);">
+                    <strong>Kontrol Langsung Guru:</strong> Klik kotak soal di bawah untuk membuka soal di layar, menampilkan kunci jawaban, dan menandai benar/salah!
+                </span>
+            </div>
+            <span class="badge" style="background:rgba(16,185,129,0.2); color:#a7f3d0; border:1px solid #10b981; font-size:0.8rem; padding:3px 10px; border-radius:20px;">
+                👆 Klik Kotak untuk Operasikan
+            </span>
+        </div>
+        
+        <div class="monitor-grid">
+            <div class="card grid-card">
+                <div class="flex-between mb-2" style="flex-wrap:wrap; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <h3 style="margin:0;">📋 Pemantauan Soal Kuis</h3>
+                        <!-- Mode Switcher: Grid vs Table List -->
+                        <div class="btn-group" style="display:inline-flex; background:rgba(0,0,0,0.3); border-radius:8px; padding:2px; border:1px solid rgba(255,255,255,0.15);">
+                            <button type="button" id="btn-view-grid" class="btn btn-small" style="padding:4px 10px; font-size:0.8rem; background:var(--gold); color:#111; font-weight:bold;" onclick="setAdminGridView('grid')">🔲 Grid</button>
+                            <button type="button" id="btn-view-list" class="btn btn-small" style="padding:4px 10px; font-size:0.8rem; background:transparent; color:white;" onclick="setAdminGridView('list')">📑 Tabel Ringkas</button>
+                        </div>
+                    </div>
+                    <!-- Search & Quick Toggle -->
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <label style="display:inline-flex; align-items:center; gap:6px; background:rgba(0,0,0,0.3); padding:4px 10px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); cursor:pointer; font-size:0.8rem; color:rgba(255,255,255,0.9); user-select:none;" title="Tampilkan atau sembunyikan nilai poin langsung di kotak">
+                            <input type="checkbox" id="admin-toggle-points" onchange="toggleBoxPointsDisplay(this.checked)" style="accent-color:var(--gold); cursor:pointer;">
+                            <span>⭐ Tampilkan Nilai di Kotak</span>
+                        </label>
+                        <input type="text" id="admin-box-search" placeholder="🔍 Cari nomor / kata soal..." class="input-text" style="font-size:0.8rem; padding:5px 12px; max-width:200px; border-radius:8px;" oninput="searchAdminBoxes(this.value)">
+                    </div>
+                </div>
+
+                <!-- Quick Filter Tabs -->
+                <div class="grid-filter-toolbar mb-3" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center;">
+                    <button type="button" class="grid-filter-btn active" data-filter="all" onclick="filterAdminBoxes('all', this)">Semua (<span id="filter-count-all">0</span>)</button>
+                    <button type="button" class="grid-filter-btn" data-filter="available" onclick="filterAdminBoxes('available', this)">🟢 Tersedia (<span id="filter-count-available">0</span>)</button>
+                    <button type="button" class="grid-filter-btn" data-filter="locked" onclick="filterAdminBoxes('locked', this)">🟡 Dikerjakan (<span id="filter-count-locked">0</span>)</button>
+                    <button type="button" class="grid-filter-btn" data-filter="correct" onclick="filterAdminBoxes('correct', this)">✅ Benar (<span id="filter-count-correct">0</span>)</button>
+                    <button type="button" class="grid-filter-btn" data-filter="wrong" onclick="filterAdminBoxes('wrong', this)">❌ Salah (<span id="filter-count-wrong">0</span>)</button>
+                </div>
+
+                <!-- View 1: Box Grid View -->
+                <div id="admin-box-grid" class="box-grid"></div>
+
+                <!-- View 2: Table List Inspection View -->
+                <div id="admin-box-list-view" class="hidden" style="max-height:540px; overflow-y:auto; border-radius:10px; border:1px solid rgba(255,255,255,0.1); background:rgba(0,0,0,0.25);">
+                    <table class="super-table" style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+                        <thead style="position:sticky; top:0; background:#1e1b4b; z-index:5;">
+                            <tr>
+                                <th style="padding:10px 8px; text-align:center; width:45px;">#</th>
+                                <th style="padding:10px 8px; text-align:center; width:75px;">Tipe</th>
+                                <th style="padding:10px 8px; text-align:left;">Cuplikan Pertanyaan</th>
+                                <th style="padding:10px 8px; text-align:left; width:130px;">Kunci Jawaban</th>
+                                <th style="padding:10px 8px; text-align:center; width:85px;">Poin</th>
+                                <th style="padding:10px 8px; text-align:center; width:110px;">Status</th>
+                                <th style="padding:10px 8px; text-align:center; width:95px;">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-box-table-body">
+                            <!-- Dynamic rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="sidebar">
+                <div class="card leaderboard-card">
+                    <h3>Leaderboard Live</h3>
+                    <div id="admin-leaderboard" class="leaderboard-list"></div>
+                    <h3 class="mt-4">Activity Log</h3>
+                    <div id="activity-log" class="admin-activity-log"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-question" class="modal hidden">
+        <div class="modal-content card">
+            <h2 id="modal-title">Tambah Soal</h2>
+            <div class="form-group">
+                <label>Tipe Soal</label>
+                <select id="q-type" class="input-text">
+                    <option value="mc">Pilihan Ganda (Otomatis)</option>
+                    <option value="tf">Benar/Salah (Otomatis)</option>
+                    <option value="match">Menjodohkan (Otomatis)</option>
+                    <option value="essay">Uraian / Essay (Manual Guru)</option>
+                    <option value="short">Isian Singkat (Manual Guru)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label>Pertanyaan / Instruksi</label>
+                <textarea id="q-text" class="input-text" rows="3"></textarea>
+            </div>
+
+            <div id="mc-fields" class="q-fields">
+                <label>Opsi & Jawaban Benar (Pilih radio)</label>
+                <div class="mc-option">
+                    <input type="radio" name="mc-correct" value="0" checked>
+                    <input type="text" id="mc-opt-0" class="input-text" placeholder="Opsi A">
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="mc-correct" value="1">
+                    <input type="text" id="mc-opt-1" class="input-text" placeholder="Opsi B">
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="mc-correct" value="2">
+                    <input type="text" id="mc-opt-2" class="input-text" placeholder="Opsi C">
+                </div>
+                <div class="mc-option">
+                    <input type="radio" name="mc-correct" value="3">
+                    <input type="text" id="mc-opt-3" class="input-text" placeholder="Opsi D">
+                </div>
+            </div>
+
+            <div id="tf-fields" class="q-fields hidden">
+                <label>Jawaban Benar</label>
+                <select id="tf-correct" class="input-text">
+                    <option value="true">BENAR</option>
+                    <option value="false">SALAH</option>
+                </select>
+            </div>
+
+            <div id="match-fields" class="q-fields hidden">
+                <label>Pasangan (Kiri - Kanan)</label>
+                <div id="match-pairs-container">
+                    <div class="match-pair">
+                        <input type="text" class="input-text m-left" placeholder="Kiri 1">
+                        <input type="text" class="input-text m-right" placeholder="Kanan 1">
+                    </div>
+                    <div class="match-pair">
+                        <input type="text" class="input-text m-left" placeholder="Kiri 2">
+                        <input type="text" class="input-text m-right" placeholder="Kanan 2">
+                    </div>
+                </div>
+                <button id="btn-add-pair" class="btn btn-secondary btn-small" style="margin-top:10px;">+ Tambah Pasangan</button>
+            </div>
+
+            <div id="short-fields" class="q-fields hidden">
+                <label>Jawaban Benar (Case insensitive)</label>
+                <input type="text" id="short-correct" class="input-text" placeholder="Jawaban...">
+            </div>
+
+            <div class="form-group" style="margin-top:15px;">
+                <label>Nilai Poin (10 - 1000)</label>
+                <input type="number" id="q-points" class="input-text" value="100" min="10" max="1000" step="10">
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-cancel-q" class="btn btn-secondary">Batal</button>
+                <button id="btn-save-q" class="btn btn-primary">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-confirm" class="modal hidden">
+        <div class="modal-content card text-center">
+            <h2>Akhiri Game?</h2>
+            <p>Apakah Anda yakin ingin mengakhiri game dan melihat hasil?</p>
+            <div class="modal-actions">
+                <button id="btn-cancel-end" class="btn btn-secondary">Batal</button>
+                <button id="btn-confirm-end" class="btn btn-danger">Ya, Akhiri</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: UPLOAD SOAL EXCEL / WORD -->
+    <div id="modal-upload-file" class="modal full-modal hidden">
+        <div class="modal-content card" style="max-width: 750px;">
+            <div class="flex-between">
+                <h2>📤 Upload Soal (Excel / Word)</h2>
+                <button class="btn btn-small btn-secondary" onclick="closeUploadModal()">✕ Tutup</button>
+            </div>
+
+            <!-- Download Template Banner -->
+            <div class="template-banner mt-2">
+                <div class="template-banner-text">
+                    <strong>Belum punya format?</strong> Unduh template resmi siap pakai:
+                </div>
+                <div class="template-btn-group">
+                    <a href="/api/template/excel" class="btn-template" download>📊 Unduh Excel (.xlsx)</a>
+                    <a href="/api/template/word" class="btn-template" download>📄 Unduh Word (.docx)</a>
+                </div>
+            </div>
+
+            <!-- Tabs: Upload File vs Paste Text -->
+            <div class="modal-tabs">
+                <button id="tab-btn-file" class="modal-tab-btn active" onclick="switchUploadTab('file')">📁 Upload File Dokumen</button>
+                <button id="tab-btn-text" class="modal-tab-btn" onclick="switchUploadTab('text')">📋 Tempel Teks dari Word</button>
+            </div>
+
+            <!-- Tab Content 1: Upload File -->
+            <div id="tab-content-file">
+                <div id="dropzone" class="file-dropzone" onclick="document.getElementById('file-input').click()">
+                    <span class="dropzone-icon">📥</span>
+                    <div class="dropzone-text">Pilih atau Seret (Drag & Drop) File ke Sini</div>
+                    <div class="dropzone-subtext">Mendukung format <strong>.xlsx, .xls, .csv, atau .docx</strong> (Maks 10MB)</div>
+                    <input type="file" id="file-input" accept=".xlsx, .xls, .csv, .docx" style="display:none;">
+                </div>
+                <div id="upload-file-status" class="mt-2 text-center hidden">
+                    <div class="spinner"></div>
+                    <span id="upload-status-text">Memproses file...</span>
+                </div>
+            </div>
+
+            <!-- Tab Content 2: Paste Text -->
+            <div id="tab-content-text" class="hidden">
+                <p style="font-size:0.9rem; opacity:0.9; margin-bottom:8px;">
+                    Salin teks soal bernomor dari Microsoft Word atau Notepad lalu tempel di bawah:
+                </p>
+                <textarea id="paste-text-input" class="input-text" rows="8" placeholder="Contoh:&#10;1. [PG] Apa ibukota Indonesia?&#10;A. Bandung&#10;B. Jakarta&#10;C. Surabaya&#10;D. Medan&#10;Kunci: B&#10;Poin: 100&#10;&#10;2. [BS] Matahari terbit dari barat.&#10;Kunci: Salah&#10;Poin: 150"></textarea>
+                <div class="mt-2 text-right">
+                    <button id="btn-process-pasted-text" class="btn btn-secondary">🔍 Proses Teks Soal</button>
+                </div>
+            </div>
+
+            <!-- Preview Parsed Questions Section -->
+            <div id="upload-preview-section" class="hidden mt-4">
+                <div class="flex-between">
+                    <h3 id="preview-heading" style="color:var(--gold);">Ditemukan 0 Soal Siap Dimuat</h3>
+                    <div style="font-size:0.9rem;">
+                        <label style="margin-right:12px; cursor:pointer;">
+                            <input type="radio" name="upload-mode" value="replace" checked> <strong>Ganti Semua Soal</strong>
+                        </label>
+                        <label style="cursor:pointer;">
+                            <input type="radio" name="upload-mode" value="append"> <strong>Tambahkan ke Daftar</strong>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="preview-container">
+                    <table class="preview-table">
+                        <thead>
+                            <tr>
+                                <th style="width:35px;">No</th>
+                                <th style="width:90px;">Tipe</th>
+                                <th>Pertanyaan</th>
+                                <th>Kunci Jawaban</th>
+                                <th style="width:60px;">Poin</th>
+                            </tr>
+                        </thead>
+                        <tbody id="preview-table-body"></tbody>
+                    </table>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="closeUploadModal()">Batal</button>
+                    <button id="btn-apply-uploaded-questions" class="btn btn-primary btn-large">✅ Terapkan Soal ke Game</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: PETUNJUK FORMAT SOAL -->
+    <div id="modal-format-guide" class="modal full-modal hidden">
+        <div class="modal-content card" style="max-width: 800px; max-height: 85vh;">
+            <div class="flex-between">
+                <h2>ℹ️ Petunjuk Format Template Soal</h2>
+                <button class="btn btn-small btn-secondary" onclick="closeGuideModal()">✕ Tutup</button>
+            </div>
+
+            <div class="modal-tabs mt-2">
+                <button id="tab-guide-excel" class="modal-tab-btn active" onclick="switchGuideTab('excel')">📊 Panduan Excel (.xlsx)</button>
+                <button id="tab-guide-word" class="modal-tab-btn" onclick="switchGuideTab('word')">📄 Panduan Word (.docx)</button>
+                <button id="tab-guide-types" class="modal-tab-btn" onclick="switchGuideTab('types')">🎯 4 Tipe Soal</button>
+            </div>
+
+            <!-- Guide Content: Excel -->
+            <div id="guide-content-excel">
+                <p>Format tabel Excel sangat mudah disiapkan dengan kolom-kolom berikut:</p>
+                <div class="table-responsive mt-2">
+                    <table class="preview-table" style="font-size:0.85rem;">
+                        <thead>
+                            <tr>
+                                <th>Kolom</th>
+                                <th>Nama Header</th>
+                                <th>Keterangan & Contoh</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>A</td>
+                                <td><code>No</code></td>
+                                <td>Nomor urut (1, 2, 3...)</td>
+                            </tr>
+                            <tr>
+                                <td>B</td>
+                                <td><code>Tipe Soal</code></td>
+                                <td>Isi: <strong>PG</strong>, <strong>Benar Salah</strong>, <strong>Isian</strong>, atau <strong>Menjodohkan</strong></td>
+                            </tr>
+                            <tr>
+                                <td>C</td>
+                                <td><code>Pertanyaan</code></td>
+                                <td>Teks pertanyaan kuis</td>
+                            </tr>
+                            <tr>
+                                <td>D - G</td>
+                                <td><code>Pilihan A - D</code></td>
+                                <td>Untuk PG: Opsi A, B, C, D.<br>Untuk Menjodohkan: Tulis <code>Kiri = Kanan</code> (contoh: <code>Indonesia = Jakarta</code>)</td>
+                            </tr>
+                            <tr>
+                                <td>H</td>
+                                <td><code>Kunci Jawaban</code></td>
+                                <td>Untuk PG: Tulis huruf <strong>A, B, C, atau D</strong>.<br>Untuk Benar Salah: <strong>Benar</strong> atau <strong>Salah</strong>.<br>Untuk Isian: Teks jawaban tepat.</td>
+                            </tr>
+                            <tr>
+                                <td>I</td>
+                                <td><code>Poin</code></td>
+                                <td>Nilai poin soal (contoh 100, 200). Jika kosong, otomatis 100.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-4 text-center">
+                    <a href="/api/template/excel" class="btn btn-primary" download>📥 Unduh Template Excel Resmi (.xlsx)</a>
+                </div>
+            </div>
+
+            <!-- Guide Content: Word -->
+            <div id="guide-content-word" class="hidden">
+                <p>Tuliskan soal bernomor di Microsoft Word dengan format seperti ini:</p>
+                <div class="guide-code-box" id="sample-word-code">1. [PG] Apa ibukota negara Indonesia?
+A. Bandung
+B. Jakarta
+C. Surabaya
+D. Medan
+Kunci: B
+Poin: 100
+
+2. [BS] Matahari terbit dari sebelah barat.
+Kunci: Salah
+Poin: 150
+
+3. [Isian] Siapakah bapak proklamator Indonesia?
+Kunci: Soekarno
+Poin: 200
+
+4. [Jodohkan] Pasangkan negara dengan ibukotanya:
+- Indonesia = Jakarta
+- Jepang = Tokyo
+- Inggris = London
+- Prancis = Paris
+Poin: 250</div>
+                <div class="flex-between mt-2">
+                    <button class="btn btn-secondary btn-small" onclick="copyWordSample()">📋 Salin Contoh ke Clipboard</button>
+                    <a href="/api/template/word" class="btn btn-primary btn-small" download>📥 Unduh Dokumen Word Template (.docx)</a>
+                </div>
+            </div>
+
+            <!-- Guide Content: 4 Types -->
+            <div id="guide-content-types" class="hidden">
+                <div class="q-card mt-2">
+                    <div class="q-card-info">
+                        <span class="badge-type badge-mc">PILIHAN GANDA</span>
+                        <p style="margin-top:5px;">Siswa memilih 1 dari 4 pilihan tombol (A, B, C, D). Kunci jawaban berupa huruf opsi (A/B/C/D).</p>
+                    </div>
+                </div>
+                <div class="q-card mt-2">
+                    <div class="q-card-info">
+                        <span class="badge-type badge-tf">BENAR / SALAH</span>
+                        <p style="margin-top:5px;">Siswa menjawab cepat dengan menekan tombol hijau "BENAR" atau merah "SALAH". Kunci bernilai Benar atau Salah.</p>
+                    </div>
+                </div>
+                <div class="q-card mt-2">
+                    <div class="q-card-info">
+                        <span class="badge-type badge-short">ISIAN SINGKAT</span>
+                        <p style="margin-top:5px;">Siswa mengetik jawaban singkat. Pengecekan jawaban bersifat <em>case-insensitive</em> dan spasi berlebih otomatis diabaikan.</p>
+                    </div>
+                </div>
+                <div class="q-card mt-2">
+                    <div class="q-card-info">
+                        <span class="badge-type badge-match">MENJODOHKAN</span>
+                        <p style="margin-top:5px;">Siswa menghubungkan pasangan item kiri dan kanan dengan klik berpasangan. Format penulisan: <code>Kiri = Kanan</code>.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions mt-4">
+                <button class="btn btn-primary" onclick="closeGuideModal()">Tutup Petunjuk</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BANK SOAL GURU -->
+    <div id="modal-question-bank" class="modal hidden">
+        <div class="modal-content card" style="max-width: 650px;">
+            <div class="flex-between mb-2">
+                <h2 style="color:var(--gold);">📚 Bank Soal Saya</h2>
+                <button onclick="closeBankModal()" class="btn btn-secondary btn-small">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Simpan kumpulan soal ke akun Guru Anda agar dapat digunakan kembali kapan saja dalam 1 klik.</p>
+
+            <!-- Save current questions section -->
+            <div class="card mb-3" style="background:rgba(255,215,0,0.05); border:1px dashed var(--gold);">
+                <h4 style="margin-bottom:8px; color:var(--gold);">💾 Simpan Soal Kuis Saat Ini</h4>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" id="bank-save-title" placeholder="Nama Paket Soal (misal: Latihan Bab 3)..." class="input-text" style="flex:1;">
+                    <button onclick="saveCurrentQuestionsToBank()" class="btn btn-primary btn-small">Simpan Paket</button>
+                </div>
+            </div>
+
+            <!-- List of saved question banks -->
+            <h4 style="margin-bottom:8px;">Koleksi Paket Soal Tersimpan</h4>
+            <div id="bank-list-container" style="max-height:260px; overflow-y:auto;">
+                <p class="text-center" style="color:var(--text-muted);">Memuat bank soal...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL LAPORAN & REKAP NILAI GURU -->
+    <div id="modal-guru-reports" class="modal hidden">
+        <div class="modal-content card" style="max-width: 800px;">
+            <div class="flex-between mb-2">
+                <h2 style="color:var(--gold);">📊 Riwayat Kuis & Rekap Nilai Siswa</h2>
+                <button onclick="closeReportsModal()" class="btn btn-secondary btn-small">✕ Tutup</button>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:12px;">Daftar seluruh kuis yang Anda selenggarakan beserta rincian nilai, akurasi, dan export nilai Excel.</p>
+
+            <div id="guru-sessions-container" style="max-height: 250px; overflow-y: auto; margin-bottom: 16px;">
+                <p class="text-center" style="color:var(--text-muted);">Memuat sesi kuis...</p>
+            </div>
+
+            <!-- Report Detail Sub-section -->
+            <div id="guru-report-detail-view" class="card hidden" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1);">
+                <div class="flex-between mb-2">
+                    <h3 id="guru-report-detail-title" style="color:var(--gold); font-size:1.1rem;">Detail Nilai Siswa</h3>
+                    <a id="btn-guru-download-excel" href="#" class="btn btn-primary btn-small">📥 Download Excel (.xlsx)</a>
+                </div>
+                <div id="guru-report-detail-meta" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px;"></div>
+                <div style="overflow-x:auto; max-height:220px; overflow-y:auto;">
+                    <table class="data-table" style="width:100%; font-size:0.85rem;">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>NIS</th>
+                                <th>Nama Siswa</th>
+                                <th>Skor</th>
+                                <th>Akurasi</th>
+                                <th>Max Streak</th>
+                                <th>Kotak</th>
+                            </tr>
+                        </thead>
+                        <tbody id="guru-report-detail-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL OPERASI KOTAK GURU (SOLO & PRESENTASI KELAS) -->
+    <div id="modal-teacher-operate" class="modal teacher-operate-modal hidden">
+        <div class="modal-content card teacher-operate-content" id="teacher-modal-dialog">
+            <!-- HEADER -->
+            <div class="flex-between mb-3" style="border-bottom:1.5px solid rgba(255,215,0,0.3); padding-bottom:14px; flex-wrap:wrap; gap:10px;">
+                <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+                    <span class="badge" id="teacher-modal-qnum" style="background:var(--gold); color:#111; font-weight:900; font-size:1.3rem; padding:6px 18px; border-radius:10px; box-shadow:0 3px 10px rgba(255,215,0,0.35);">Kotak #1</span>
+                    <span class="badge" id="teacher-modal-points" style="background:rgba(56,189,248,0.25); color:#38bdf8; font-size:1.15rem; font-weight:800; padding:6px 16px; border-radius:10px; border:1px solid #38bdf8;">⭐ 100 Poin</span>
+                    <span class="badge" id="teacher-modal-type" style="background:rgba(255,255,255,0.14); color:#fff; font-size:1.05rem; font-weight:700; padding:6px 14px; border-radius:10px;">PILIHAN GANDA</span>
+                    <span class="badge" id="teacher-modal-mode-badge" style="background:#10b981; color:#fff; font-size:1rem; font-weight:bold; padding:5px 14px; border-radius:20px;">⚡ Penilaian Otomatis</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <button type="button" class="btn btn-secondary btn-small" id="btn-toggle-projector-mode" onclick="toggleProjectorMode()" style="border-color:var(--gold); color:var(--gold); font-size:1rem; padding:6px 14px; display:inline-flex; align-items:center; gap:6px; font-weight:bold;" title="Beralih ke Tampilan Layar Penuh Proyektor">
+                        ⛶ <span id="projector-mode-label">Layar Penuh Proyektor</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-small" onclick="closeTeacherModal()" style="font-size:1.4rem; padding:4px 16px; font-weight:bold;" title="Tutup">✕</button>
+                </div>
+            </div>
+
+            <!-- QUESTION TEXT HERO -->
+            <div class="teacher-question-hero" style="background:rgba(0,0,0,0.65); border-radius:20px; padding:28px 36px; margin-bottom:24px; border-left:8px solid var(--gold); box-shadow:0 12px 40px rgba(0,0,0,0.7), inset 0 2px 14px rgba(0,0,0,0.6);">
+                <div style="font-size:1.15rem; color:var(--gold); font-weight:900; margin-bottom:10px; text-transform:uppercase; letter-spacing:2px; display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:1.4rem;">📖</span> PERTANYAAN SOAL:
+                </div>
+                <div id="teacher-modal-question-text" class="q-title" style="font-size:clamp(2.3rem, 3.5vw, 3.6rem); font-weight:900; color:#ffffff; line-height:1.35; letter-spacing:0.3px; text-shadow:0 3px 12px rgba(0,0,0,0.95), 0 0 24px rgba(255,255,255,0.2); word-break:break-word;">
+                    Pertanyaan soal...
+                </div>
+            </div>
+
+            <!-- RESULT ALERT BANNER (Shown upon answer) -->
+            <div id="teacher-modal-result-banner" class="card mb-3 hidden" style="padding:16px 24px; border-radius:14px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:14px;">
+                <div style="display:flex; align-items:center; gap:16px;">
+                    <span id="teacher-result-icon" style="font-size:2.2rem;">🎉</span>
+                    <div>
+                        <strong id="teacher-result-title" style="font-size:1.35rem; display:block;">Jawaban Benar!</strong>
+                        <small id="teacher-result-subtitle" style="color:rgba(255,255,255,0.9); font-size:1.05rem;">Poin telah ditambahkan ke skor.</small>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-primary btn-large" onclick="closeTeacherModal()" style="font-size:1.15rem; padding:12px 28px; font-weight:bold; box-shadow:0 6px 20px rgba(16,185,129,0.4);">
+                    ✅ Lanjut ke Kotak Berikutnya →
+                </button>
+            </div>
+
+            <!-- INTERACTIVE OPTIONS / ITEMS -->
+            <div id="teacher-modal-options-area" style="margin-bottom:22px; flex:1;">
+                <!-- Filled dynamically -->
+            </div>
+
+            <!-- ANSWER REVEAL PANEL -->
+            <div id="teacher-answer-reveal-panel" class="card mb-3 hidden" style="background:rgba(16,185,129,0.16); border:2.5px solid #10b981; border-radius:14px; padding:18px 24px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+                    <span style="font-size:1.6rem;">🔑</span>
+                    <strong style="color:#a7f3d0; font-size:1.2rem; letter-spacing:0.5px;">KUNCI JAWABAN RESMI:</strong>
+                </div>
+                <div id="teacher-answer-reveal-text" style="font-size:1.35rem; color:#fff; font-weight:800; padding-left:36px; line-height:1.45;">
+                    -
+                </div>
+                <div id="teacher-modal-explanation-box" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.25); padding-left:36px;">
+                    <span style="color:#fde047; font-size:0.95rem; font-weight:bold; display:block; margin-bottom:4px;">💡 Pembahasan / Penjelasan:</span>
+                    <div id="teacher-modal-explanation-text" style="font-size:1.1rem; color:rgba(255,255,255,0.92); line-height:1.5;"></div>
+                </div>
+            </div>
+
+            <!-- ACTION BUTTONS CONTAINER -->
+            <div id="teacher-modal-actions-container" class="flex-between" style="border-top:1.5px solid rgba(255,255,255,0.15); padding-top:18px; flex-wrap:wrap; gap:12px;">
+                <!-- Populated dynamically based on auto vs manual grading -->
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PANDUAN LENGKAP ATURAN PERMAINAN -->
+    <div id="modal-game-rules" class="modal full-modal hidden">
+        <div class="modal-content card" style="max-width: 820px; max-height: 88vh; overflow-y: auto;">
+            <div class="flex-between mb-3" style="border-bottom: 1px solid rgba(255,215,0,0.3); padding-bottom: 10px;">
+                <h2 style="color:var(--gold); margin:0;">📜 Panduan Lengkap Aturan Permainan</h2>
+                <button type="button" class="btn btn-small btn-secondary" onclick="closeGameRulesModal()">✕ Tutup</button>
+            </div>
+
+            <div style="display:grid; gap:16px;">
+                <div style="background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border-left:4px solid #ffbe0b;">
+                    <h3 style="color:#ffbe0b; margin:0 0 6px 0; font-size:1.1rem;">⚡ 1. Mekanisme Rebutan Kotak (Atomic Lock)</h3>
+                    <p style="margin:0; font-size:0.9rem; line-height:1.5; color:rgba(255,255,255,0.85);">
+                        Setiap kotak kuis bersifat <em>First-Come, First-Served</em>. Ketika seorang siswa mengklik kotak yang tersedia, kotak langsung terkunci untuk siswa tersebut selama batas waktu pengerjaan. Siswa lain tidak dapat mengklik kotak yang sedang dikerjakan. Jika siswa kehabisan waktu, kotak akan otomatis dilepas kembali ke arena kuis.
+                    </p>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border-left:4px solid #38bdf8;">
+                    <h3 style="color:#38bdf8; margin:0 0 6px 0; font-size:1.1rem;">⏱️ 2. Aturan Waktu & Countdown</h3>
+                    <ul style="margin:6px 0 0 18px; font-size:0.9rem; line-height:1.5; color:rgba(255,255,255,0.85); padding:0;">
+                        <li><strong>Timer Global Match:</strong> Waktu keseluruhan pertandingan kuis. Ketika timer ini habis, arena permainan otomatis selesai dan podium juara langsung diumumkan.</li>
+                        <li><strong>Batas Waktu per Kotak:</strong> Waktu yang dimiliki siswa untuk menjawab 1 soal sejak kotak dibuka. Jika habis sebelum menjawab, kotak kembali ke status 'Tersedia'.</li>
+                    </ul>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border-left:4px solid #ef4444;">
+                    <h3 style="color:#fca5a5; margin:0 0 6px 0; font-size:1.1rem;">⚠️ 3. Sistem Poin, Penalti & Kombo Streak</h3>
+                    <ul style="margin:6px 0 0 18px; font-size:0.9rem; line-height:1.5; color:rgba(255,255,255,0.85); padding:0;">
+                        <li><strong>Jawaban Benar:</strong> Siswa memperoleh poin penuh sesuai nilai soal (misal: +100 Poin).</li>
+                        <li><strong>Combo Multiplier:</strong> Menjawab benar berurutan memicu bonus kombo (hingga x2.0 skor) untuk memacu adrenalin siswa.</li>
+                        <li><strong>Penalti Salah:</strong> Jika fitur penalti aktif, poin siswa akan berkurang sesuai nilai penalti jika menjawab salah.</li>
+                    </ul>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border-left:4px solid #a855f7;">
+                    <h3 style="color:#d8b4fe; margin:0 0 6px 0; font-size:1.1rem;">🎁 4. Mode Kotak Misteri (Mystery Points)</h3>
+                    <p style="margin:0; font-size:0.9rem; line-height:1.5; color:rgba(255,255,255,0.85);">
+                        Jika diaktifkan, nilai poin di kotak kuis disembunyikan dan diacak dinamis antara 50 hingga 300 poin. Siswa hanya melihat lambang '🎁 ?' sehingga setiap kotak yang dibuka memberikan kejutan nilai baru!
+                    </p>
+                </div>
+
+                <div style="background:rgba(255,255,255,0.06); border-radius:12px; padding:16px; border-left:4px solid #10b981;">
+                    <h3 style="color:#a7f3d0; margin:0 0 6px 0; font-size:1.1rem;">👨‍🏫 5. Operasi Guru Mandiri (Kelas Proyektor)</h3>
+                    <p style="margin:0; font-size:0.9rem; line-height:1.5; color:rgba(255,255,255,0.85);">
+                        Guru dapat memandu permainan di depan kelas tanpa siswa harus memegang HP. Cukup buka nomor kotak yang diteriakkan/dipilih siswa, bahas bersama di layar besar proyektor, lalu klik opsi untuk menilai otomatis (PG, B/S, Match) atau tandai manual untuk soal Uraian/Essay.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 text-right">
+                <button type="button" class="btn btn-primary" onclick="closeGameRulesModal()">Mengerti & Siap Bermain 👍</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="js/sounds.js?v=20260929b"></script>
+    <script src="js/sprite-gen.js?v=20260929b"></script>
+    <script src="js/admin.js?v=20260929b"></script>
+</body>
+</html>
