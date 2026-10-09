@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hasil - Clash of Champion</title>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="results-body">
+    <div id="confetti-container" class="confetti-container"></div>
+    
+    <div class="container results-container slideUp">
+        <h1 class="title glow-gold text-center mb-4">🏆 HASIL AKHIR 🏆</h1>
+        
+        <!-- SOLO / CLASSROOM MODE RESULTS BANNER -->
+        <div id="solo-results-banner" class="card text-center mb-4 hidden" style="background:linear-gradient(135deg, rgba(14, 165, 233, 0.2) 0%, rgba(99, 102, 241, 0.25) 100%); border:2px solid #38bdf8; border-radius:18px; padding:24px;">
+            <div style="font-size:3rem; margin-bottom:8px;">🎯</div>
+            <h2 style="color:#38bdf8; font-family:'Fredoka One'; margin-bottom:6px;">SESI KUIS MODE MANDIRI SELESAI!</h2>
+            <p style="font-size:1.05rem; color:rgba(255,255,255,0.9); margin-bottom:16px;">
+                Kuis dioperasikan langsung oleh Guru bersama seluruh murid di kelas.
+            </p>
+            <div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap;">
+                <div class="card" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:12px; padding:12px 24px; min-width:140px;">
+                    <span style="font-size:0.85rem; color:var(--text-muted); display:block;">Total Skor Kelas:</span>
+                    <strong id="solo-summary-score" style="font-size:2rem; color:var(--gold); font-family:'Fredoka One';">0</strong>
+                </div>
+                <div class="card" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:12px; padding:12px 24px; min-width:140px;">
+                    <span style="font-size:0.85rem; color:var(--text-muted); display:block;">Soal Benar:</span>
+                    <strong id="solo-summary-correct" style="font-size:2rem; color:#a7f3d0; font-family:'Fredoka One';">0</strong>
+                </div>
+                <div class="card" style="background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:12px; padding:12px 24px; min-width:140px;">
+                    <span style="font-size:0.85rem; color:var(--text-muted); display:block;">Total Kotak Soal:</span>
+                    <strong id="solo-summary-total" style="font-size:2rem; color:#38bdf8; font-family:'Fredoka One';">0</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="podium-section mb-5" id="podium-section">
+            <div class="podium-step pos-2" id="podium-2">
+                <div class="podium-avatar bounce">🥈</div>
+                <div class="podium-name">Player 2</div>
+                <div class="podium-score">0</div>
+                <div class="podium-block bg-silver">2</div>
+            </div>
+            
+            <div class="podium-step pos-1" id="podium-1">
+                <div class="podium-avatar bounce" style="animation-delay:0.2s">👑</div>
+                <div class="podium-name glow-gold">Player 1</div>
+                <div class="podium-score">0</div>
+                <div class="podium-block bg-gold">1</div>
+            </div>
+            
+            <div class="podium-step pos-3" id="podium-3">
+                <div class="podium-avatar bounce" style="animation-delay:0.4s">🥉</div>
+                <div class="podium-name">Player 3</div>
+                <div class="podium-score">0</div>
+                <div class="podium-block bg-bronze">3</div>
+            </div>
+        </div>
+
+        <div class="titles-section grid-2 mb-4">
+            <div class="card text-center">
+                <h3>⚡ Sniper Cepat</h3>
+                <p id="title-fastest" class="title-value">-</p>
+            </div>
+            <div class="card text-center">
+                <h3>👑 Raja Poin</h3>
+                <p id="title-highest" class="title-value">-</p>
+            </div>
+            <div class="card text-center">
+                <h3>🗺️ Penjelajah</h3>
+                <p id="title-boxes" class="title-value">-</p>
+            </div>
+            <div class="card text-center">
+                <h3>🎯 Si Akurat</h3>
+                <p id="title-accuracy" class="title-value">-</p>
+            </div>
+        </div>
+
+        <div class="card table-card mb-4">
+            <h3>Peringkat Lengkap</h3>
+            <div class="table-responsive">
+                <table class="ranking-table">
+                    <thead>
+                        <tr>
+                            <th>Peringkat</th>
+                            <th>Pemain</th>
+                            <th>Skor</th>
+                            <th>Akurasi</th>
+                            <th>Streak Max</th><th>Boxes Taken</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ranking-body">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RETROACTIVE SAVE BANNER FOR ANONYMOUS GURU -->
+        <div id="retroactive-save-banner" class="card text-center mb-4 hidden" style="background:rgba(255, 190, 11, 0.15); border:2px dashed var(--gold);">
+            <div style="font-size:2rem; margin-bottom:6px;">💾</div>
+            <h3 style="color:var(--gold); margin-bottom:4px;">Simpan Hasil Kuis & Rapor Siswa ke Akun Guru?</h3>
+            <p style="font-size:0.9rem; color:rgba(255,255,255,0.85); max-width:600px; margin:0 auto 14px auto;">
+                Anda menjalankan kuis ini dalam mode cepat (anonim). Masuk dengan akun Guru Anda sekarang agar rekap nilai seluruh siswa ini otomatis tersimpan ke buku nilai dan database permanen!
+            </p>
+            <button type="button" onclick="openClaimModal()" class="btn btn-primary">
+                🔑 Simpan ke Akun Guru Sekarang
+            </button>
+        </div>
+
+        <div id="saved-success-banner" class="card text-center mb-4 hidden" style="background:rgba(16, 185, 129, 0.2); border:2px solid #10b981;">
+            <h3 style="color:#a7f3d0; margin-bottom:6px;">✅ Sesi Kuis & Rapor Siswa Berhasil Disimpan!</h3>
+            <p style="font-size:0.9rem; color:rgba(255,255,255,0.85); margin-bottom:12px;">Data nilai sudah tersimpan di database guru.</p>
+            <a id="btn-download-excel" href="#" class="btn btn-success btn-small" target="_blank">📥 Unduh Rekap Excel (.xlsx)</a>
+        </div>
+
+        <div class="text-center" style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+            <button id="btn-home" class="btn btn-primary btn-large pulse">Kembali ke Halaman Utama</button>
+        </div>
+    </div>
+
+    <!-- MODAL CLAIM SESSION -->
+    <div id="modal-claim" class="modal hidden">
+        <div class="modal-content card" style="max-width:440px;">
+            <div class="flex-between mb-2">
+                <h3 style="color:var(--gold); margin:0;">🔑 Login Akun Guru</h3>
+                <button type="button" onclick="closeClaimModal()" class="btn btn-secondary btn-small">✕</button>
+            </div>
+            <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:14px;">Masukkan username dan password guru untuk menautkan sesi kuis ini:</p>
+            
+            <form id="form-claim" onsubmit="submitClaimSession(event)">
+                <div class="form-group">
+                    <label>Username Guru</label>
+                    <input type="text" id="claim-username" class="input-text" placeholder="Contoh: guru" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="claim-password" class="input-text" placeholder="Contoh: guru123" required>
+                </div>
+                <div id="claim-error" class="error-text hidden mb-2"></div>
+                <button type="submit" id="btn-submit-claim" class="btn btn-primary btn-full mt-2">Simpan Hasil Kuis 🚀</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/sounds.js"></script>
+    <script src="js/sprite-gen.js"></script>
+    <script src="js/results.js"></script>
+</body>
+</html>

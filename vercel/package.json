@@ -1,0 +1,19 @@
+{
+  "name": "clash-of-champion-vercel",
+  "version": "1.0.0",
+  "description": "Clash of Champion Multiplayer Quiz - Serverless Edition for Vercel",
+  "main": "api/index.js",
+  "scripts": {
+    "start": "node api/index.js",
+    "dev": "node api/index.js"
+  },
+  "dependencies": {
+    "docx": "^9.8.0",
+    "express": "^4.22.3",
+    "mammoth": "^1.13.0",
+    "multer": "^2.4.0",
+    "socket.io": "^4.8.4",
+    "uuid": "^9.0.1",
+    "xlsx": "^0.18.5"
+  }
+}
