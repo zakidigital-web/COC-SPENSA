@@ -1027,16 +1027,30 @@ app.post('/api/live/action', async (req, res) => {
         const claimResult = gameEngine.claimBox(room.pin, payload.playerId, payload.boxIndex);
         if (claimResult.success) {
           const player = room.players.get(payload.playerId);
+          const box = (room.boxes || [])[payload.boxIndex];
+          const question = (room.questionMap && box) ? room.questionMap.get(box.questionId) : (room.questions || [])[payload.boxIndex];
+          const safeQuestion = question ? gameEngine.getQuestionForPlayer(question) : null;
+
           await syncRoomToDB(room, {
-            type: 'box-locked',
+            type: 'box-claimed',
             data: {
               boxIndex: payload.boxIndex,
-              lockedBy: payload.playerId,
-              lockedByName: player ? player.nickname : 'Pemain'
+              playerId: payload.playerId,
+              playerName: player ? player.nickname : 'Pemain'
             }
           });
+
+          actionResult = {
+            success: true,
+            boxIndex: payload.boxIndex,
+            question: safeQuestion,
+            points: (claimResult.originalPoints !== undefined) ? claimResult.originalPoints : (box ? box.points : 100),
+            isMystery: box ? Boolean(box.isMystery) : false,
+            timeLimit: room.config.timePerQuestion || 30
+          };
+        } else {
+          actionResult = claimResult;
         }
-        actionResult = claimResult;
         break;
       }
       case 'submit-answer': {
@@ -1071,16 +1085,45 @@ app.post('/api/live/action', async (req, res) => {
         break;
       }
       case 'admin-claim-box': {
-        const adminClaim = gameEngine.adminClaimBox(room.pin, payload.boxIndex);
-        await syncRoomToDB(room, {
-          type: 'box-locked',
-          data: {
-            boxIndex: payload.boxIndex,
-            lockedBy: 'admin',
-            lockedByName: '👨‍🏫 Guru'
+        let adminClaim = gameEngine.adminClaimBox(room.pin, payload.boxIndex);
+        if (!adminClaim || !adminClaim.success) {
+          // Fallback if room not in 'playing' yet or box index direct preview
+          const box = (room.boxes || [])[payload.boxIndex];
+          const question = (room.questionMap && box)
+            ? room.questionMap.get(box.questionId)
+            : (room.questions || [])[payload.boxIndex];
+          if (question) {
+            adminClaim = {
+              success: true,
+              alreadyCompleted: false,
+              box: box ? gameEngine._sanitizeBoxForClient(box) : { index: payload.boxIndex, points: question.points || 100 },
+              question: { ...question }
+            };
           }
-        });
-        actionResult = adminClaim;
+        }
+
+        if (adminClaim && adminClaim.success) {
+          await syncRoomToDB(room, {
+            type: 'box-claimed',
+            data: {
+              boxIndex: payload.boxIndex,
+              playerId: 'admin',
+              playerName: 'Guru (Layar Utama)'
+            }
+          });
+
+          actionResult = {
+            success: true,
+            boxIndex: payload.boxIndex,
+            box: adminClaim.box,
+            points: (adminClaim.box && adminClaim.box.points) ? adminClaim.box.points : 100,
+            question: adminClaim.question,
+            alreadyCompleted: Boolean(adminClaim.alreadyCompleted),
+            timeLimit: room.config.timePerQuestion || 30
+          };
+        } else {
+          actionResult = adminClaim || { success: false, reason: 'Soal tidak ditemukan' };
+        }
         break;
       }
       case 'admin-complete-box': {

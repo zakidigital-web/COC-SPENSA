@@ -202,15 +202,18 @@
           if (json.success) {
             this.trigger('box-claimed', {
               boxIndex: json.boxIndex,
+              playerId: this.playerId,
+              playerName: sessionStorage.getItem('coc_nickname') || 'Pemain'
+            });
+            this.trigger('question-data', {
+              boxIndex: json.boxIndex,
               question: json.question,
               points: json.points,
+              isMystery: json.isMystery,
               timeLimit: json.timeLimit
             });
           } else {
-            this.trigger('claim-rejected', {
-              boxIndex: data.boxIndex,
-              reason: json.reason || 'Kotak tidak tersedia'
-            });
+            this.trigger('box-already-taken', {});
           }
         }
 
@@ -218,8 +221,19 @@
           this.trigger('answer-result', json);
         }
 
-        if (event === 'admin-claim-box' && json.success) {
-          this.trigger('admin-box-claimed', json);
+        if (event === 'admin-claim-box') {
+          if (json.success) {
+            this.trigger('admin-box-opened', {
+              boxIndex: json.boxIndex,
+              box: json.box,
+              points: json.points || 100,
+              question: json.question,
+              alreadyCompleted: Boolean(json.alreadyCompleted),
+              timeLimit: json.timeLimit || 30
+            });
+          } else {
+            this.trigger('error', { message: json.reason || 'Gagal membuka kotak' });
+          }
         }
 
         if (event === 'admin-complete-box' && json.success) {
