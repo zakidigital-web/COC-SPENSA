@@ -456,6 +456,15 @@ socket.on('join-success', (data) => {
     window.location.href = 'game.html';
 });
 
+socket.on('connect_error', (err) => {
+    loading?.classList.add('hidden');
+    joinSection?.classList.remove('hidden');
+    if (joinError) {
+        joinError.innerText = '⚠️ Koneksi server realtime terputus. Pastikan server WebSocket aktif.';
+        joinError.classList.remove('hidden');
+    }
+});
+
 socket.on('error', (err) => {
     loading?.classList.add('hidden');
     joinSection?.classList.remove('hidden');

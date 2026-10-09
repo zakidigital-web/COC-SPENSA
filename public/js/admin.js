@@ -386,6 +386,9 @@ window.confirmEndGame = () => {
 };
 
 socket.on('connect', () => {
+    connectErrorCount = 0;
+    const notice = document.getElementById('serverless-ws-notice');
+    if (notice) notice.remove();
     initRoleUI();
     const savedPin = sessionStorage.getItem('coc_admin_pin');
     const savedToken = sessionStorage.getItem('coc_admin_token');
@@ -464,6 +467,26 @@ socket.on('room-created', (data) => {
     initRoleUI();
     if (questions && questions.length > 0) {
         socket.emit('update-questions', { pin: data.pin, questions });
+    }
+});
+
+let connectErrorCount = 0;
+socket.on('connect_error', (err) => {
+    connectErrorCount++;
+    console.error('Socket connect_error:', err);
+    if (!roomPin && connectErrorCount >= 2) {
+        document.querySelectorAll('.display-room-pin').forEach(el => {
+            el.innerText = '⚠️ Error';
+            el.title = 'Koneksi realtime WebSocket terputus / tidak didukung di environment ini.';
+        });
+        const banner = document.getElementById('admin-pin-banner');
+        if (banner && !document.getElementById('serverless-ws-notice')) {
+            const notice = document.createElement('div');
+            notice.id = 'serverless-ws-notice';
+            notice.style.cssText = 'background:#ef4444; color:white; padding:10px 16px; border-radius:10px; font-size:0.88rem; margin:10px 20px; font-weight:bold; line-height:1.4; box-shadow:0 4px 12px rgba(0,0,0,0.3);';
+            notice.innerHTML = '⚠️ <strong>Koneksi Realtime WebSocket Gagal:</strong> Vercel Serverless Function tidak mendukung koneksi Socket.IO persisten (multiplayer real-time). Agar kuis kelas 30–40 siswa dapat dimainkan, deploy backend ke platform Node.js aktif seperti <strong>Render.com</strong> atau <strong>Koyeb.com</strong> (100% Gratis & Tanpa Kartu Kredit).';
+            banner.parentNode.insertBefore(notice, banner.nextSibling);
+        }
     }
 });
 
