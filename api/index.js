@@ -1435,28 +1435,33 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-server.listen(PORT, HOST, () => {
-  log('info', `Clash of Champion server running on http://${HOST}:${PORT}`);
-});
-
-// Graceful shutdown handling
-function handleGracefulShutdown(signal) {
-  log('info', `Received ${signal}, closing server gracefully...`);
-  server.close(() => {
-    log('info', 'HTTP & WebSocket server closed.');
-    try {
-      AppDatabase.close();
-      log('info', 'Database connection closed.');
-    } catch (e) {}
-    process.exit(0);
+if (!process.env.VERCEL) {
+  server.listen(PORT, HOST, () => {
+    log('info', `Clash of Champion server running on http://${HOST}:${PORT}`);
   });
-  
-  // Force exit after 10s timeout
-  setTimeout(() => {
-    log('error', 'Force shutdown after timeout');
-    process.exit(1);
-  }, 10000);
+
+  // Graceful shutdown handling for non-serverless environments
+  function handleGracefulShutdown(signal) {
+    log('info', `Received ${signal}, closing server gracefully...`);
+    server.close(() => {
+      log('info', 'HTTP & WebSocket server closed.');
+      try {
+        AppDatabase.close();
+        log('info', 'Database connection closed.');
+      } catch (e) {}
+      process.exit(0);
+    });
+    
+    setTimeout(() => {
+      log('error', 'Force shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  }
+
+  process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
 }
 
-process.on('SIGTERM', () => handleGracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => handleGracefulShutdown('SIGINT'));
+module.exports = (req, res) => {
+  server.emit('request', req, res);
+};

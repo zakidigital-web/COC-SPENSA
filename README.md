@@ -1,6 +1,10 @@
-# ⚔️ Clash of Champion — Real-Time Multiplayer Quiz Game
+# ⚔️ Clash of Champion — Real-Time Multiplayer Quiz Game (Vercel Ready)
 
 Game kuis edukasi real-time multiplayer berbasis web yang dirancang khusus untuk satu kelas (1 Admin/Guru + **30–40+ Siswa** secara simultan).
+
+> [!TIP]
+> **🚀 Siap Deploy di Vercel (1-Click)**: Branch `main` ini sudah dikonfigurasi penuh untuk serverless Vercel (`api/index.js`, `vercel.json`, pure JS database tanpa compiler C++).
+> Versi Docker/Render/Fly.io original tetap tersimpan aman di branch [`backup-original`](https://github.com/zakidigital-web/COC-SPENSA/tree/backup-original).
 
 ---
 

@@ -1,73 +1,18 @@
-const Database = require('better-sqlite3');
-const path = require('path');
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 
-// Ensure data directory exists
-const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+// Determine writable directory for Vercel Serverless (/tmp)
+const dataDir = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp' : path.join(__dirname, '..', 'data'));
 if (!fs.existsSync(dataDir)) {
-  fs.mkdirSync(dataDir, { recursive: true });
+  try {
+    fs.mkdirSync(dataDir, { recursive: true });
+  } catch (e) {}
 }
 
-const dbPath = process.env.DB_PATH || path.join(dataDir, 'clash.db');
-const db = new Database(dbPath);
+const storeFile = path.join(dataDir, 'clash_store.json');
 
-// Enable WAL mode for high concurrency
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-// Initialize schema
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password TEXT NOT NULL,
-    role TEXT NOT NULL, -- 'admin', 'guru', 'siswa'
-    name TEXT NOT NULL,
-    extra TEXT, -- JSON string: { nip, subject, nis, class, ... }
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  );
-
-  CREATE TABLE IF NOT EXISTS game_sessions (
-    id TEXT PRIMARY KEY,
-    pin TEXT NOT NULL,
-    guru_id INTEGER,
-    guru_name TEXT,
-    title TEXT,
-    total_questions INTEGER DEFAULT 0,
-    total_players INTEGER DEFAULT 0,
-    results_json TEXT, -- Full podium, rankings, and titles JSON
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (guru_id) REFERENCES users(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS student_records (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    game_session_id TEXT NOT NULL,
-    student_id INTEGER,
-    student_identifier TEXT, -- NIS or nickname
-    student_name TEXT NOT NULL,
-    score INTEGER DEFAULT 0,
-    rank INTEGER DEFAULT 0,
-    accuracy REAL DEFAULT 0,
-    max_streak INTEGER DEFAULT 0,
-    boxes_taken INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (game_session_id) REFERENCES game_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE SET NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS question_banks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    guru_id INTEGER,
-    title TEXT NOT NULL,
-    questions_json TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (guru_id) REFERENCES users(id) ON DELETE CASCADE
-  );
-`);
-
-// Salted PBKDF2 hash helper with backwards compatibility
+// Salted PBKDF2 hash helper
 function hashPassword(pass, salt = null) {
   if (!salt) {
     salt = crypto.randomBytes(16).toString('hex');
@@ -78,7 +23,6 @@ function hashPassword(pass, salt = null) {
 
 function verifyPassword(pass, storedHash) {
   if (!storedHash) return false;
-  // Fallback for legacy unsalted SHA-256 hashes
   if (!storedHash.includes('$')) {
     const legacy = crypto.createHash('sha256').update(String(pass)).digest('hex');
     return legacy === storedHash;
@@ -88,36 +32,114 @@ function verifyPassword(pass, storedHash) {
   return derived === hash;
 }
 
-// Seed default accounts if empty
-const countStmt = db.prepare('SELECT COUNT(*) as count FROM users');
-const userCount = countStmt.get().count;
+// In-Memory Store with /tmp file persistence
+let store = {
+  users: [],
+  game_sessions: [],
+  student_records: [],
+  question_banks: [],
+  nextUserId: 1,
+  nextRecordId: 1,
+  nextBankId: 1
+};
 
-if (userCount === 0) {
-  const insertUser = db.prepare(`
-    INSERT INTO users (username, password, role, name, extra)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-
-  // Default Admin
-  insertUser.run('admin', hashPassword('admin123'), 'admin', 'Administrator Utama', JSON.stringify({ roleDesc: 'Super Admin' }));
-
-  // Default Guru
-  insertUser.run('guru', hashPassword('guru123'), 'guru', 'Ibu Guru Sarah, S.Pd', JSON.stringify({ nip: '198501152010012001', subject: 'Ilmu Pengetahuan Alam' }));
-
-  // Default Students
-  insertUser.run('1001', hashPassword('123'), 'siswa', 'Ahmad Dani', JSON.stringify({ nis: '1001', class: '7-A' }));
-  insertUser.run('1002', hashPassword('123'), 'siswa', 'Budi Santoso', JSON.stringify({ nis: '1002', class: '7-A' }));
-  insertUser.run('1003', hashPassword('123'), 'siswa', 'Citra Lestari', JSON.stringify({ nis: '1003', class: '7-A' }));
-  insertUser.run('1004', hashPassword('123'), 'siswa', 'Dewi Anggraini', JSON.stringify({ nis: '1004', class: '7-B' }));
-  insertUser.run('1005', hashPassword('123'), 'siswa', 'Eko Prasetyo', JSON.stringify({ nis: '1005', class: '7-B' }));
-  console.log('[DB] Database seeded with default Admin, Guru, and 5 Siswa.');
+function loadStore() {
+  try {
+    if (fs.existsSync(storeFile)) {
+      const raw = fs.readFileSync(storeFile, 'utf8');
+      const data = JSON.parse(raw);
+      store = { ...store, ...data };
+      return;
+    }
+  } catch (e) {}
+  seedDefaults();
+  saveStore();
 }
 
+function saveStore() {
+  try {
+    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2), 'utf8');
+  } catch (e) {}
+}
+
+function seedDefaults() {
+  if (store.users.length === 0) {
+    store.users = [
+      {
+        id: 1,
+        username: 'admin',
+        password: hashPassword('admin123'),
+        role: 'admin',
+        name: 'Administrator Utama',
+        extra: { roleDesc: 'Super Admin' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 2,
+        username: 'guru',
+        password: hashPassword('guru123'),
+        role: 'guru',
+        name: 'Ibu Guru Sarah, S.Pd',
+        extra: { nip: '198501152010012001', subject: 'Ilmu Pengetahuan Alam' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 3,
+        username: '1001',
+        password: hashPassword('123'),
+        role: 'siswa',
+        name: 'Ahmad Dani',
+        extra: { nis: '1001', class: '7-A' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 4,
+        username: '1002',
+        password: hashPassword('123'),
+        role: 'siswa',
+        name: 'Budi Santoso',
+        extra: { nis: '1002', class: '7-A' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 5,
+        username: '1003',
+        password: hashPassword('123'),
+        role: 'siswa',
+        name: 'Citra Lestari',
+        extra: { nis: '1003', class: '7-A' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 6,
+        username: '1004',
+        password: hashPassword('123'),
+        role: 'siswa',
+        name: 'Dewi Anggraini',
+        extra: { nis: '1004', class: '7-B' },
+        created_at: new Date().toISOString()
+      },
+      {
+        id: 7,
+        username: '1005',
+        password: hashPassword('123'),
+        role: 'siswa',
+        name: 'Eko Prasetyo',
+        extra: { nis: '1005', class: '7-B' },
+        created_at: new Date().toISOString()
+      }
+    ];
+    store.nextUserId = 8;
+  }
+}
+
+// Initial load
+loadStore();
+
 class AppDatabase {
-  // Auth & User Management
   static authenticate(username, password) {
-    const stmt = db.prepare('SELECT id, username, password, role, name, extra, created_at FROM users WHERE username = ?');
-    const user = stmt.get(username);
+    loadStore();
+    const user = store.users.find(u => u.username === username);
     if (!user) return null;
 
     if (!verifyPassword(password, user.password)) {
@@ -126,274 +148,281 @@ class AppDatabase {
 
     // Transparently upgrade legacy unsalted hash to salted PBKDF2
     if (!user.password.includes('$')) {
-      const newHash = hashPassword(password);
-      db.prepare('UPDATE users SET password = ? WHERE id = ?').run(newHash, user.id);
+      user.password = hashPassword(password);
+      saveStore();
     }
 
-    delete user.password;
-    if (user.extra) {
-      try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
-    }
-    return user;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    return safeUser;
   }
 
   static getUserById(id) {
-    const stmt = db.prepare('SELECT id, username, role, name, extra, created_at FROM users WHERE id = ?');
-    const user = stmt.get(id);
-    if (user && user.extra) {
-      try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
-    }
-    return user;
+    loadStore();
+    const user = store.users.find(u => u.id === Number(id));
+    if (!user) return null;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    return safeUser;
   }
 
   static getUserByUsername(username) {
-    const stmt = db.prepare('SELECT id, username, role, name, extra, created_at FROM users WHERE username = ?');
-    const user = stmt.get(username);
-    if (user && user.extra) {
-      try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
-    }
-    return user;
+    loadStore();
+    const user = store.users.find(u => u.username === username);
+    if (!user) return null;
+    const safeUser = { ...user };
+    delete safeUser.password;
+    return safeUser;
   }
 
   static listUsersByRole(role) {
-    const stmt = db.prepare('SELECT id, username, role, name, extra, created_at FROM users WHERE role = ? ORDER BY id DESC');
-    const rows = stmt.all(role);
-    return rows.map(r => {
-      try { r.extra = JSON.parse(r.extra); } catch (e) { r.extra = {}; }
-      return r;
-    });
+    loadStore();
+    return store.users
+      .filter(u => u.role === role)
+      .map(u => {
+        const copy = { ...u };
+        delete copy.password;
+        return copy;
+      })
+      .reverse();
   }
 
   static createUser({ username, password, role, name, extra = {} }) {
-    const hashed = hashPassword(password || '123');
-    const stmt = db.prepare(`
-      INSERT INTO users (username, password, role, name, extra)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-    const info = stmt.run(username, hashed, role, name, JSON.stringify(extra));
-    return this.getUserById(info.lastInsertRowid);
+    loadStore();
+    const existing = store.users.find(u => u.username === username);
+    if (existing) {
+      throw new Error(`Username ${username} sudah digunakan`);
+    }
+
+    const newUser = {
+      id: store.nextUserId++,
+      username,
+      password: hashPassword(password || '123'),
+      role,
+      name,
+      extra,
+      created_at: new Date().toISOString()
+    };
+
+    store.users.push(newUser);
+    saveStore();
+
+    const safeUser = { ...newUser };
+    delete safeUser.password;
+    return safeUser;
   }
 
   static updateUser(id, { name, password, extra }) {
-    let query = 'UPDATE users SET name = ?';
-    const params = [name];
+    loadStore();
+    const user = store.users.find(u => u.id === Number(id));
+    if (!user) return null;
 
-    if (password) {
-      query += ', password = ?';
-      params.push(hashPassword(password));
-    }
-    if (extra !== undefined) {
-      query += ', extra = ?';
-      params.push(JSON.stringify(extra));
-    }
-    query += ' WHERE id = ?';
-    params.push(id);
+    if (name !== undefined) user.name = name;
+    if (password) user.password = hashPassword(password);
+    if (extra !== undefined) user.extra = extra;
 
-    db.prepare(query).run(...params);
-    return this.getUserById(id);
+    saveStore();
+
+    const safeUser = { ...user };
+    delete safeUser.password;
+    return safeUser;
   }
 
   static deleteUser(id) {
-    return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    loadStore();
+    const idx = store.users.findIndex(u => u.id === Number(id));
+    if (idx !== -1) {
+      store.users.splice(idx, 1);
+      saveStore();
+      return true;
+    }
+    return false;
   }
 
   // Game Session & Student Records Persistence
   static saveGameSession({ id, pin, guruId, guruName, title, totalQuestions, totalPlayers, results }) {
-    const stmt = db.prepare(`
-      INSERT INTO game_sessions (id, pin, guru_id, guru_name, title, total_questions, total_players, results_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
+    loadStore();
+    const session = {
       id,
       pin,
-      guruId || null,
-      guruName || 'Guru Anonim',
-      title || 'Kuis Clash of Champion',
-      totalQuestions || 0,
-      totalPlayers || 0,
-      JSON.stringify(results || {})
-    );
+      guru_id: guruId || null,
+      guru_name: guruName || 'Guru Anonim',
+      title: title || 'Kuis Clash of Champion',
+      total_questions: totalQuestions || 0,
+      total_players: totalPlayers || 0,
+      results_json: JSON.stringify(results || {}),
+      created_at: new Date().toISOString()
+    };
 
-    // Save individual student records if results available
+    store.game_sessions.push(session);
+
     if (results && results.fullRanking && Array.isArray(results.fullRanking)) {
-      const recordStmt = db.prepare(`
-        INSERT INTO student_records (
-          game_session_id, student_id, student_identifier, student_name, 
-          score, rank, accuracy, max_streak, boxes_taken
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      const insertMany = db.transaction((rankings) => {
-        for (let i = 0; i < rankings.length; i++) {
-          const p = rankings[i];
-          recordStmt.run(
-            id,
-            p.studentId || null,
-            p.studentIdentifier || p.nickname,
-            p.nickname,
-            p.score || 0,
-            i + 1,
-            p.accuracy || 0,
-            p.maxStreak || 0,
-            p.boxesTaken || 0
-          );
-        }
-      });
-
-      insertMany(results.fullRanking);
+      for (let i = 0; i < results.fullRanking.length; i++) {
+        const p = results.fullRanking[i];
+        store.student_records.push({
+          id: store.nextRecordId++,
+          game_session_id: id,
+          student_id: p.studentId || null,
+          student_identifier: p.studentIdentifier || p.nickname,
+          student_name: p.nickname,
+          score: p.score || 0,
+          rank: i + 1,
+          accuracy: p.accuracy || 0,
+          max_streak: p.maxStreak || 0,
+          boxes_taken: p.boxesTaken || 0,
+          created_at: new Date().toISOString()
+        });
+      }
     }
 
+    saveStore();
     return id;
   }
 
   static listGameSessions(guruId = null) {
-    let stmt;
+    loadStore();
+    let list = store.game_sessions;
     if (guruId) {
-      stmt = db.prepare(`
-        SELECT id, pin, guru_id, guru_name, title, total_questions, total_players, created_at 
-        FROM game_sessions 
-        WHERE guru_id = ? 
-        ORDER BY created_at DESC
-      `);
-      return stmt.all(guruId);
-    } else {
-      stmt = db.prepare(`
-        SELECT id, pin, guru_id, guru_name, title, total_questions, total_players, created_at 
-        FROM game_sessions 
-        ORDER BY created_at DESC
-      `);
-      return stmt.all();
+      list = list.filter(s => s.guru_id === Number(guruId));
     }
+    return [...list].reverse().map(s => ({
+      id: s.id,
+      pin: s.pin,
+      guru_id: s.guru_id,
+      guru_name: s.guru_name,
+      title: s.title,
+      total_questions: s.total_questions,
+      total_players: s.total_players,
+      created_at: s.created_at
+    }));
   }
 
   static getGameSessionById(id) {
-    const sessionStmt = db.prepare('SELECT * FROM game_sessions WHERE id = ?');
-    const session = sessionStmt.get(id);
+    loadStore();
+    const session = store.game_sessions.find(s => s.id === id);
     if (!session) return null;
 
-    if (session.results_json) {
-      try { session.results = JSON.parse(session.results_json); } catch (e) { session.results = {}; }
+    const copy = { ...session };
+    if (copy.results_json) {
+      try { copy.results = JSON.parse(copy.results_json); } catch (e) { copy.results = {}; }
     }
 
-    const recordsStmt = db.prepare('SELECT * FROM student_records WHERE game_session_id = ? ORDER BY rank ASC');
-    session.studentRecords = recordsStmt.all(id);
+    copy.studentRecords = store.student_records
+      .filter(r => r.game_session_id === id)
+      .sort((a, b) => a.rank - b.rank);
 
-    return session;
+    return copy;
   }
 
   static getStudentRecordHistory(studentIdOrIdentifier) {
-    const stmt = db.prepare(`
-      SELECT sr.*, gs.title as game_title, gs.created_at as game_date, gs.guru_name
-      FROM student_records sr
-      JOIN game_sessions gs ON sr.game_session_id = gs.id
-      WHERE sr.student_id = ? OR sr.student_identifier = ?
-      ORDER BY sr.created_at DESC
-    `);
-    return stmt.all(studentIdOrIdentifier, String(studentIdOrIdentifier));
+    loadStore();
+    const sId = Number(studentIdOrIdentifier);
+    const sStr = String(studentIdOrIdentifier);
+
+    const records = store.student_records.filter(r => r.student_id === sId || r.student_identifier === sStr);
+    return records.map(r => {
+      const session = store.game_sessions.find(s => s.id === r.game_session_id) || {};
+      return {
+        ...r,
+        game_title: session.title || 'Kuis',
+        game_date: session.created_at || r.created_at,
+        guru_name: session.guru_name || '-'
+      };
+    }).reverse();
   }
 
   // Question Banks
   static saveQuestionBank(guruId, title, questions) {
-    const stmt = db.prepare(`
-      INSERT INTO question_banks (guru_id, title, questions_json)
-      VALUES (?, ?, ?)
-    `);
-    const info = stmt.run(guruId, title, JSON.stringify(questions));
-    return info.lastInsertRowid;
+    loadStore();
+    const newBank = {
+      id: store.nextBankId++,
+      guru_id: Number(guruId),
+      title,
+      questions_json: JSON.stringify(questions),
+      created_at: new Date().toISOString()
+    };
+
+    store.question_banks.push(newBank);
+    saveStore();
+    return newBank.id;
   }
 
   static listQuestionBanks(guruId = null) {
-    let stmt, rows;
+    loadStore();
+    let list = store.question_banks;
     if (guruId !== null && guruId !== undefined && guruId !== '') {
-      stmt = db.prepare(`
-        SELECT qb.id, qb.guru_id, qb.title, qb.created_at, length(qb.questions_json) as size,
-               u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
-        FROM question_banks qb
-        LEFT JOIN users u ON qb.guru_id = u.id
-        WHERE qb.guru_id = ?
-        ORDER BY qb.created_at DESC
-      `);
-      rows = stmt.all(Number(guruId));
-    } else {
-      stmt = db.prepare(`
-        SELECT qb.id, qb.guru_id, qb.title, qb.created_at, length(qb.questions_json) as size,
-               u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
-        FROM question_banks qb
-        LEFT JOIN users u ON qb.guru_id = u.id
-        ORDER BY qb.created_at DESC
-      `);
-      rows = stmt.all();
+      list = list.filter(b => b.guru_id === Number(guruId));
     }
 
-    return rows.map(r => {
+    return [...list].reverse().map(b => {
+      const creator = store.users.find(u => u.id === b.guru_id) || {};
       let questionCount = 0;
       try {
-        const raw = db.prepare('SELECT questions_json FROM question_banks WHERE id = ?').get(r.id);
-        if (raw && raw.questions_json) {
-          const parsed = JSON.parse(raw.questions_json);
-          questionCount = Array.isArray(parsed) ? parsed.length : 0;
-        }
+        const qArr = JSON.parse(b.questions_json);
+        questionCount = Array.isArray(qArr) ? qArr.length : 0;
       } catch (e) {}
 
-      let extraObj = {};
-      if (r.creator_extra) {
-        try { extraObj = JSON.parse(r.creator_extra); } catch (e) {}
-      }
-
       return {
-        ...r,
-        questionCount,
-        creator_extra: extraObj
+        id: b.id,
+        guru_id: b.guru_id,
+        title: b.title,
+        created_at: b.created_at,
+        size: b.questions_json.length,
+        creator_name: creator.name || 'Guru',
+        creator_username: creator.username || '',
+        creator_role: creator.role || 'guru',
+        creator_extra: creator.extra || {},
+        questionCount
       };
     });
   }
 
   static getQuestionBank(id, guruId = null) {
-    let stmt, row;
-    if (guruId !== null && guruId !== undefined && guruId !== '') {
-      stmt = db.prepare(`
-        SELECT qb.*, u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
-        FROM question_banks qb
-        LEFT JOIN users u ON qb.guru_id = u.id
-        WHERE qb.id = ? AND qb.guru_id = ?
-      `);
-      row = stmt.get(Number(id), Number(guruId));
-    } else {
-      stmt = db.prepare(`
-        SELECT qb.*, u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
-        FROM question_banks qb
-        LEFT JOIN users u ON qb.guru_id = u.id
-        WHERE qb.id = ?
-      `);
-      row = stmt.get(Number(id));
-    }
-    if (row) {
-      if (row.questions_json) {
-        try { row.questions = JSON.parse(row.questions_json); } catch (e) { row.questions = []; }
+    loadStore();
+    const bank = store.question_banks.find(b => {
+      if (guruId !== null && guruId !== undefined && guruId !== '') {
+        return b.id === Number(id) && b.guru_id === Number(guruId);
       }
-      if (row.creator_extra) {
-        try { row.creator_extra = JSON.parse(row.creator_extra); } catch (e) { row.creator_extra = {}; }
-      }
-    }
-    return row;
+      return b.id === Number(id);
+    });
+
+    if (!bank) return null;
+    const creator = store.users.find(u => u.id === bank.guru_id) || {};
+
+    let questions = [];
+    try {
+      questions = JSON.parse(bank.questions_json);
+    } catch (e) {}
+
+    return {
+      ...bank,
+      creator_name: creator.name || 'Guru',
+      creator_username: creator.username || '',
+      creator_role: creator.role || 'guru',
+      creator_extra: creator.extra || {},
+      questions
+    };
   }
 
   static deleteQuestionBank(id, guruId = null) {
-    let stmt;
-    if (guruId !== null && guruId !== undefined && guruId !== '') {
-      stmt = db.prepare('DELETE FROM question_banks WHERE id = ? AND guru_id = ?');
-      return stmt.run(Number(id), Number(guruId)).changes > 0;
-    } else {
-      stmt = db.prepare('DELETE FROM question_banks WHERE id = ?');
-      return stmt.run(Number(id)).changes > 0;
+    loadStore();
+    const idx = store.question_banks.findIndex(b => {
+      if (guruId !== null && guruId !== undefined && guruId !== '') {
+        return b.id === Number(id) && b.guru_id === Number(guruId);
+      }
+      return b.id === Number(id);
+    });
+
+    if (idx !== -1) {
+      store.question_banks.splice(idx, 1);
+      saveStore();
+      return true;
     }
+    return false;
   }
 
   static close() {
-    try {
-      db.close();
-    } catch (e) {}
+    saveStore();
   }
 }
 

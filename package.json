@@ -1,30 +1,18 @@
 {
-  "name": "clash-of-champion",
+  "name": "clash-of-champion-vercel",
   "version": "1.0.0",
-  "description": "Real-time multiplayer quiz game",
-  "main": "server.js",
+  "description": "Clash of Champion Multiplayer Quiz - Serverless Edition for Vercel",
+  "main": "api/index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "test": "node test-integration.js",
-    "test:stress": "node test-40-students.js",
-    "test:upload": "node test-upload-features.js",
-    "test:sprite": "node test-sprite-gen.js",
-    "test:roles": "node test-role-system.js",
-    "test:solo": "node test-teacher-solo-mode.js",
-    "test:bank": "node test-admin-bank.js",
-    "test:mystery": "node test-mystery-grid.js",
-    "test:boxdisplay": "node test-box-number-display.js",
-    "test:projector": "node test-teacher-matching-essay-projector.js"
+    "start": "node api/index.js",
+    "dev": "node api/index.js"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
     "docx": "^9.8.0",
     "express": "^4.22.3",
     "mammoth": "^1.13.0",
     "multer": "^2.4.0",
     "socket.io": "^4.8.4",
-    "socket.io-client": "^4.8.4",
     "uuid": "^9.0.1",
     "xlsx": "^0.18.5"
   }

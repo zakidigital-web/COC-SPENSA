@@ -1,4 +1,4 @@
-const socket = io();
+const socket = io({ transports: ['polling', 'websocket'], reconnection: true });
 const avatars = ['🦁', '🐉', '🦅', '🐺', '🦊', '🐼', '🦄', '🐯', '🦈', '🦉', '🐙', '🦋'];
 
 // State variables declared at the very top to prevent TDZ issues
