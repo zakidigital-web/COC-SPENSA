@@ -276,13 +276,13 @@ function requireAuth(allowedRoles = []) {
  * POST /api/auth/login
  * Unified login endpoint for Admin, Guru, and Siswa
  */
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     if (!username || !password) {
       return res.status(400).json({ success: false, message: 'Username dan password wajib diisi.' });
     }
-    const user = AppDatabase.authenticate(username, password);
+    const user = await AppDatabase.authenticate(username, password);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Username atau password salah!' });
     }
@@ -296,9 +296,9 @@ app.post('/api/auth/login', (req, res) => {
 /**
  * GET /api/admin/teachers - List all teachers
  */
-app.get('/api/admin/teachers', requireAuth(['admin']), (req, res) => {
+app.get('/api/admin/teachers', requireAuth(['admin']), async (req, res) => {
   try {
-    const teachers = AppDatabase.listUsersByRole('guru');
+    const teachers = await AppDatabase.listUsersByRole('guru');
     res.json({ success: true, teachers });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -308,17 +308,17 @@ app.get('/api/admin/teachers', requireAuth(['admin']), (req, res) => {
 /**
  * POST /api/admin/teachers - Create teacher account
  */
-app.post('/api/admin/teachers', requireAuth(['admin']), (req, res) => {
+app.post('/api/admin/teachers', requireAuth(['admin']), async (req, res) => {
   try {
     const { username, password, name, nip, subject } = req.body;
     if (!username || !name) {
       return res.status(400).json({ success: false, message: 'Username dan Nama Guru wajib diisi.' });
     }
-    const existing = AppDatabase.getUserByUsername(username);
+    const existing = await AppDatabase.getUserByUsername(username);
     if (existing) {
       return res.status(400).json({ success: false, message: 'Username guru sudah digunakan.' });
     }
-    const teacher = AppDatabase.createUser({
+    const teacher = await AppDatabase.createUser({
       username: username.trim(),
       password: password || 'guru123',
       role: 'guru',
@@ -334,9 +334,9 @@ app.post('/api/admin/teachers', requireAuth(['admin']), (req, res) => {
 /**
  * DELETE /api/admin/teachers/:id - Remove teacher account
  */
-app.delete('/api/admin/teachers/:id', requireAuth(['admin']), (req, res) => {
+app.delete('/api/admin/teachers/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    AppDatabase.deleteUser(req.params.id);
+    await AppDatabase.deleteUser(req.params.id);
     res.json({ success: true, message: 'Akun guru berhasil dihapus.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -346,9 +346,9 @@ app.delete('/api/admin/teachers/:id', requireAuth(['admin']), (req, res) => {
 /**
  * GET /api/admin/students - List all registered students
  */
-app.get('/api/admin/students', requireAuth(['admin']), (req, res) => {
+app.get('/api/admin/students', requireAuth(['admin']), async (req, res) => {
   try {
-    const students = AppDatabase.listUsersByRole('siswa');
+    const students = await AppDatabase.listUsersByRole('siswa');
     res.json({ success: true, students });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -358,17 +358,17 @@ app.get('/api/admin/students', requireAuth(['admin']), (req, res) => {
 /**
  * POST /api/admin/students - Create single student
  */
-app.post('/api/admin/students', requireAuth(['admin']), (req, res) => {
+app.post('/api/admin/students', requireAuth(['admin']), async (req, res) => {
   try {
     const { username, password, name, className } = req.body;
     if (!username || !name) {
       return res.status(400).json({ success: false, message: 'NIS (Username) dan Nama Siswa wajib diisi.' });
     }
-    const existing = AppDatabase.getUserByUsername(username);
+    const existing = await AppDatabase.getUserByUsername(username);
     if (existing) {
       return res.status(400).json({ success: false, message: 'NIS/Username siswa sudah terdaftar.' });
     }
-    const student = AppDatabase.createUser({
+    const student = await AppDatabase.createUser({
       username: username.trim(),
       password: password || '123',
       role: 'siswa',
@@ -384,7 +384,7 @@ app.post('/api/admin/students', requireAuth(['admin']), (req, res) => {
 /**
  * POST /api/admin/students/bulk - Bulk create students from JSON list
  */
-app.post('/api/admin/students/bulk', requireAuth(['admin']), (req, res) => {
+app.post('/api/admin/students/bulk', requireAuth(['admin']), async (req, res) => {
   try {
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) {
@@ -402,13 +402,13 @@ app.post('/api/admin/students/bulk', requireAuth(['admin']), (req, res) => {
 
       if (!nis || !name) continue;
 
-      const existing = AppDatabase.getUserByUsername(nis);
+      const existing = await AppDatabase.getUserByUsername(nis);
       if (existing) {
         errors.push(`NIS ${nis} sudah terdaftar, dilewati.`);
         continue;
       }
 
-      AppDatabase.createUser({
+      await AppDatabase.createUser({
         username: nis,
         password: pass,
         role: 'siswa',
@@ -432,9 +432,9 @@ app.post('/api/admin/students/bulk', requireAuth(['admin']), (req, res) => {
 /**
  * DELETE /api/admin/students/:id - Delete a student
  */
-app.delete('/api/admin/students/:id', requireAuth(['admin']), (req, res) => {
+app.delete('/api/admin/students/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    AppDatabase.deleteUser(req.params.id);
+    await AppDatabase.deleteUser(req.params.id);
     res.json({ success: true, message: 'Akun siswa berhasil dihapus.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -444,9 +444,9 @@ app.delete('/api/admin/students/:id', requireAuth(['admin']), (req, res) => {
 /**
  * GET /api/admin/reports - View all quiz sessions (Admin)
  */
-app.get('/api/admin/reports', requireAuth(['admin']), (req, res) => {
+app.get('/api/admin/reports', requireAuth(['admin']), async (req, res) => {
   try {
-    const sessions = AppDatabase.listGameSessions();
+    const sessions = await AppDatabase.listGameSessions();
     res.json({ success: true, sessions });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -456,10 +456,10 @@ app.get('/api/admin/reports', requireAuth(['admin']), (req, res) => {
 /**
  * GET /api/guru/reports - View quiz sessions for specific guru
  */
-app.get('/api/guru/reports', requireAuth(['guru', 'admin']), (req, res) => {
+app.get('/api/guru/reports', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
     const guruId = req.query.guruId ? parseInt(req.query.guruId) : null;
-    const sessions = AppDatabase.listGameSessions(guruId);
+    const sessions = await AppDatabase.listGameSessions(guruId);
     res.json({ success: true, sessions });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -469,9 +469,9 @@ app.get('/api/guru/reports', requireAuth(['guru', 'admin']), (req, res) => {
 /**
  * GET /api/guru/reports/:id - View detail of a single quiz session
  */
-app.get('/api/guru/reports/:id', requireAuth(['guru', 'admin']), (req, res) => {
+app.get('/api/guru/reports/:id', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
-    const session = AppDatabase.getGameSessionById(req.params.id);
+    const session = await AppDatabase.getGameSessionById(req.params.id);
     if (!session) {
       return res.status(404).json({ success: false, message: 'Sesi kuis tidak ditemukan.' });
     }
@@ -484,9 +484,9 @@ app.get('/api/guru/reports/:id', requireAuth(['guru', 'admin']), (req, res) => {
 /**
  * GET /api/guru/reports/:id/export-excel - Download Excel report of quiz session
  */
-app.get('/api/guru/reports/:id/export-excel', requireAuth(['guru', 'admin']), (req, res) => {
+app.get('/api/guru/reports/:id/export-excel', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
-    const session = AppDatabase.getGameSessionById(req.params.id);
+    const session = await AppDatabase.getGameSessionById(req.params.id);
     if (!session) {
       return res.status(404).json({ error: 'Sesi kuis tidak ditemukan.' });
     }
@@ -534,9 +534,9 @@ app.get('/api/guru/reports/:id/export-excel', requireAuth(['guru', 'admin']), (r
 /**
  * GET /api/admin/question-banks - List all question banks across all teachers and admins
  */
-app.get('/api/admin/question-banks', requireAuth(['admin']), (req, res) => {
+app.get('/api/admin/question-banks', requireAuth(['admin']), async (req, res) => {
   try {
-    const banks = AppDatabase.listQuestionBanks(null);
+    const banks = await AppDatabase.listQuestionBanks(null);
     res.json({ success: true, banks });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -546,14 +546,14 @@ app.get('/api/admin/question-banks', requireAuth(['admin']), (req, res) => {
 /**
  * POST /api/admin/question-banks - Admin creates a new question bank
  */
-app.post('/api/admin/question-banks', requireAuth(['admin']), (req, res) => {
+app.post('/api/admin/question-banks', requireAuth(['admin']), async (req, res) => {
   try {
     const { title, questions, guruId } = req.body;
     if (!title || !Array.isArray(questions) || questions.length === 0) {
       return res.status(400).json({ success: false, message: 'Judul dan daftar soal minimal 1 soal wajib diisi.' });
     }
     const creatorId = guruId ? parseInt(guruId) : req.user.id;
-    const id = AppDatabase.saveQuestionBank(creatorId, title, questions);
+    const id = await AppDatabase.saveQuestionBank(creatorId, title, questions);
     res.json({ success: true, id, message: 'Bank soal berhasil disimpan oleh Admin!' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -563,9 +563,9 @@ app.post('/api/admin/question-banks', requireAuth(['admin']), (req, res) => {
 /**
  * GET /api/admin/question-banks/:id - Admin inspects specific question bank details
  */
-app.get('/api/admin/question-banks/:id', requireAuth(['admin']), (req, res) => {
+app.get('/api/admin/question-banks/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    const bank = AppDatabase.getQuestionBank(req.params.id, null);
+    const bank = await AppDatabase.getQuestionBank(req.params.id, null);
     if (!bank) {
       return res.status(404).json({ success: false, message: 'Bank soal tidak ditemukan.' });
     }
@@ -578,9 +578,9 @@ app.get('/api/admin/question-banks/:id', requireAuth(['admin']), (req, res) => {
 /**
  * DELETE /api/admin/question-banks/:id - Admin deletes any question bank
  */
-app.delete('/api/admin/question-banks/:id', requireAuth(['admin']), (req, res) => {
+app.delete('/api/admin/question-banks/:id', requireAuth(['admin']), async (req, res) => {
   try {
-    const deleted = AppDatabase.deleteQuestionBank(req.params.id, null);
+    const deleted = await AppDatabase.deleteQuestionBank(req.params.id, null);
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Bank soal tidak ditemukan.' });
     }
@@ -593,10 +593,10 @@ app.delete('/api/admin/question-banks/:id', requireAuth(['admin']), (req, res) =
 /**
  * GET /api/guru/question-banks - List question banks saved by guru
  */
-app.get('/api/guru/question-banks', requireAuth(['guru', 'admin']), (req, res) => {
+app.get('/api/guru/question-banks', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
     const guruId = req.query.guruId ? parseInt(req.query.guruId) : (req.user.role === 'admin' ? null : req.user.id);
-    const banks = AppDatabase.listQuestionBanks(guruId);
+    const banks = await AppDatabase.listQuestionBanks(guruId);
     res.json({ success: true, banks });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -606,14 +606,14 @@ app.get('/api/guru/question-banks', requireAuth(['guru', 'admin']), (req, res) =
 /**
  * POST /api/guru/question-banks - Save question bank for guru
  */
-app.post('/api/guru/question-banks', requireAuth(['guru', 'admin']), (req, res) => {
+app.post('/api/guru/question-banks', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
     const { guruId, title, questions } = req.body;
     const targetGuruId = guruId || req.user.id;
     if (!targetGuruId || !title || !Array.isArray(questions)) {
       return res.status(400).json({ success: false, message: 'Data bank soal tidak lengkap.' });
     }
-    const id = AppDatabase.saveQuestionBank(targetGuruId, title, questions);
+    const id = await AppDatabase.saveQuestionBank(targetGuruId, title, questions);
     res.json({ success: true, id, message: 'Bank soal berhasil disimpan!' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -623,10 +623,10 @@ app.post('/api/guru/question-banks', requireAuth(['guru', 'admin']), (req, res) 
 /**
  * GET /api/guru/question-banks/:id - Load specific question bank
  */
-app.get('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), (req, res) => {
+app.get('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
     const guruId = req.user.role === 'admin' ? null : (req.query.guruId ? parseInt(req.query.guruId) : req.user.id);
-    const bank = AppDatabase.getQuestionBank(req.params.id, guruId);
+    const bank = await AppDatabase.getQuestionBank(req.params.id, guruId);
     if (!bank) {
       return res.status(404).json({ success: false, message: 'Bank soal tidak ditemukan.' });
     }
@@ -639,10 +639,10 @@ app.get('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), (req, re
 /**
  * DELETE /api/guru/question-banks/:id - Delete question bank by owner or admin
  */
-app.delete('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), (req, res) => {
+app.delete('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), async (req, res) => {
   try {
     const guruId = req.user.role === 'admin' ? null : req.user.id;
-    const deleted = AppDatabase.deleteQuestionBank(req.params.id, guruId);
+    const deleted = await AppDatabase.deleteQuestionBank(req.params.id, guruId);
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Bank soal tidak ditemukan atau Anda tidak berwenang.' });
     }
@@ -656,14 +656,14 @@ app.delete('/api/guru/question-banks/:id', requireAuth(['guru', 'admin']), (req,
  * POST /api/guru/claim-session
  * Retroactively links and saves an anonymous game session to a teacher's account.
  */
-app.post('/api/guru/claim-session', (req, res) => {
+app.post('/api/guru/claim-session', async (req, res) => {
   try {
     const { pin, username, password } = req.body;
     if (!pin || !username || !password) {
       return res.status(400).json({ success: false, message: 'PIN, username, dan password wajib diisi.' });
     }
 
-    const user = AppDatabase.authenticate(username, password);
+    const user = await AppDatabase.authenticate(username, password);
     if (!user || (user.role !== 'guru' && user.role !== 'admin')) {
       return res.status(401).json({ success: false, message: 'Username atau password guru salah.' });
     }
@@ -679,7 +679,7 @@ app.post('/api/guru/claim-session', (req, res) => {
 
     const results = gameEngine.getGameResults(pin);
     const sessionId = uuidv4();
-    AppDatabase.saveGameSession({
+    await AppDatabase.saveGameSession({
       id: sessionId,
       pin: pin,
       guruId: user.id,
@@ -704,13 +704,13 @@ app.post('/api/guru/claim-session', (req, res) => {
 /**
  * POST /api/student/verify - Verify student NIS and password
  */
-app.post('/api/student/verify', (req, res) => {
+app.post('/api/student/verify', async (req, res) => {
   try {
     const { nis, password } = req.body;
     if (!nis || !password) {
       return res.status(400).json({ success: false, message: 'NIS dan Password wajib diisi.' });
     }
-    const user = AppDatabase.authenticate(nis, password);
+    const user = await AppDatabase.authenticate(nis, password);
     if (!user || user.role !== 'siswa') {
       return res.status(401).json({ success: false, message: 'NIS atau password salah!' });
     }
@@ -731,9 +731,9 @@ app.post('/api/student/verify', (req, res) => {
 /**
  * GET /api/student/history/:identifier - View past game history for student
  */
-app.get('/api/student/history/:identifier', (req, res) => {
+app.get('/api/student/history/:identifier', async (req, res) => {
   try {
-    const records = AppDatabase.getStudentRecordHistory(req.params.identifier);
+    const records = await AppDatabase.getStudentRecordHistory(req.params.identifier);
     res.json({ success: true, records });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

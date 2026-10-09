@@ -1,18 +1,13 @@
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
 
-// Determine writable directory for Vercel Serverless (/tmp)
-const dataDir = process.env.DATA_DIR || (process.env.VERCEL ? '/tmp' : path.join(__dirname, '..', 'data'));
-if (!fs.existsSync(dataDir)) {
-  try {
-    fs.mkdirSync(dataDir, { recursive: true });
-  } catch (e) {}
-}
+// Load environment variables if present
+try {
+  require('dotenv').config();
+} catch (e) {}
 
-const storeFile = path.join(dataDir, 'clash_store.json');
-
-// Salted PBKDF2 hash helper
+// PBKDF2 Password Hashing & Verification
 function hashPassword(pass, salt = null) {
   if (!salt) {
     salt = crypto.randomBytes(16).toString('hex');
@@ -32,217 +27,388 @@ function verifyPassword(pass, storedHash) {
   return derived === hash;
 }
 
-// In-Memory Store with /tmp file persistence
-let store = {
-  users: [],
-  game_sessions: [],
-  student_records: [],
-  question_banks: [],
-  nextUserId: 1,
-  nextRecordId: 1,
-  nextBankId: 1
-};
+// Check Turso Configuration
+const isTurso = Boolean(process.env.TURSO_DATABASE_URL);
+let tursoClient = null;
 
-function loadStore() {
+if (isTurso) {
+  const { createClient } = require('@libsql/client');
+  tursoClient = createClient({
+    url: process.env.TURSO_DATABASE_URL,
+    authToken: process.env.TURSO_AUTH_TOKEN
+  });
+  console.log('[DB] Connected to Turso Cloud SQLite:', process.env.TURSO_DATABASE_URL);
+}
+
+// Fallback JSON Store (if Turso is not configured)
+const localFallbackFile = process.env.VERCEL
+  ? path.join('/tmp', 'clash_store.json')
+  : path.join(__dirname, '..', 'data', 'clash_store.json');
+
+function getFallbackStore() {
   try {
-    if (fs.existsSync(storeFile)) {
-      const raw = fs.readFileSync(storeFile, 'utf8');
-      const data = JSON.parse(raw);
-      store = { ...store, ...data };
-      return;
+    if (fs.existsSync(localFallbackFile)) {
+      return JSON.parse(fs.readFileSync(localFallbackFile, 'utf8'));
     }
   } catch (e) {}
-  seedDefaults();
-  saveStore();
+  const store = {
+    users: [
+      { id: 1, username: 'admin', password: hashPassword('admin123'), role: 'admin', name: 'Administrator Utama', extra: { roleDesc: 'Super Admin' }, created_at: new Date().toISOString() },
+      { id: 2, username: 'guru', password: hashPassword('guru123'), role: 'guru', name: 'Ibu Guru Sarah, S.Pd', extra: { nip: '198501152010012001', subject: 'Ilmu Pengetahuan Alam' }, created_at: new Date().toISOString() },
+      { id: 3, username: '1001', password: hashPassword('123'), role: 'siswa', name: 'Ahmad Dani', extra: { nis: '1001', class: '7-A' }, created_at: new Date().toISOString() },
+      { id: 4, username: '1002', password: hashPassword('123'), role: 'siswa', name: 'Budi Santoso', extra: { nis: '1002', class: '7-A' }, created_at: new Date().toISOString() },
+      { id: 5, username: '1003', password: hashPassword('123'), role: 'siswa', name: 'Citra Lestari', extra: { nis: '1003', class: '7-A' }, created_at: new Date().toISOString() },
+      { id: 6, username: '1004', password: hashPassword('123'), role: 'siswa', name: 'Dewi Anggraini', extra: { nis: '1004', class: '7-B' }, created_at: new Date().toISOString() },
+      { id: 7, username: '1005', password: hashPassword('123'), role: 'siswa', name: 'Eko Prasetyo', extra: { nis: '1005', class: '7-B' }, created_at: new Date().toISOString() }
+    ],
+    game_sessions: [],
+    student_records: [],
+    question_banks: []
+  };
+  try {
+    const dir = path.dirname(localFallbackFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localFallbackFile, JSON.stringify(store, null, 2), 'utf8');
+  } catch (e) {}
+  return store;
 }
 
-function saveStore() {
+function saveFallbackStore(store) {
   try {
-    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2), 'utf8');
+    const dir = path.dirname(localFallbackFile);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(localFallbackFile, JSON.stringify(store, null, 2), 'utf8');
   } catch (e) {}
 }
-
-function seedDefaults() {
-  if (store.users.length === 0) {
-    store.users = [
-      {
-        id: 1,
-        username: 'admin',
-        password: hashPassword('admin123'),
-        role: 'admin',
-        name: 'Administrator Utama',
-        extra: { roleDesc: 'Super Admin' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 2,
-        username: 'guru',
-        password: hashPassword('guru123'),
-        role: 'guru',
-        name: 'Ibu Guru Sarah, S.Pd',
-        extra: { nip: '198501152010012001', subject: 'Ilmu Pengetahuan Alam' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 3,
-        username: '1001',
-        password: hashPassword('123'),
-        role: 'siswa',
-        name: 'Ahmad Dani',
-        extra: { nis: '1001', class: '7-A' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 4,
-        username: '1002',
-        password: hashPassword('123'),
-        role: 'siswa',
-        name: 'Budi Santoso',
-        extra: { nis: '1002', class: '7-A' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 5,
-        username: '1003',
-        password: hashPassword('123'),
-        role: 'siswa',
-        name: 'Citra Lestari',
-        extra: { nis: '1003', class: '7-A' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 6,
-        username: '1004',
-        password: hashPassword('123'),
-        role: 'siswa',
-        name: 'Dewi Anggraini',
-        extra: { nis: '1004', class: '7-B' },
-        created_at: new Date().toISOString()
-      },
-      {
-        id: 7,
-        username: '1005',
-        password: hashPassword('123'),
-        role: 'siswa',
-        name: 'Eko Prasetyo',
-        extra: { nis: '1005', class: '7-B' },
-        created_at: new Date().toISOString()
-      }
-    ];
-    store.nextUserId = 8;
-  }
-}
-
-// Initial load
-loadStore();
 
 class AppDatabase {
-  static authenticate(username, password) {
-    loadStore();
-    const user = store.users.find(u => u.username === username);
-    if (!user) return null;
+  // Ensure tables and seed data exist
+  static async init() {
+    if (!isTurso || !tursoClient) return;
 
-    if (!verifyPassword(password, user.password)) {
-      return null;
+    try {
+      await tursoClient.batch([
+        `CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT UNIQUE NOT NULL,
+          password TEXT NOT NULL,
+          role TEXT NOT NULL,
+          name TEXT NOT NULL,
+          extra TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS game_sessions (
+          id TEXT PRIMARY KEY,
+          pin TEXT NOT NULL,
+          guru_id INTEGER,
+          guru_name TEXT,
+          title TEXT,
+          total_questions INTEGER DEFAULT 0,
+          total_players INTEGER DEFAULT 0,
+          results_json TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (guru_id) REFERENCES users(id) ON DELETE SET NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS student_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          game_session_id TEXT NOT NULL,
+          student_id INTEGER,
+          student_identifier TEXT,
+          student_name TEXT NOT NULL,
+          score INTEGER DEFAULT 0,
+          rank INTEGER DEFAULT 0,
+          accuracy REAL DEFAULT 0,
+          max_streak INTEGER DEFAULT 0,
+          boxes_taken INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (game_session_id) REFERENCES game_sessions(id) ON DELETE CASCADE,
+          FOREIGN KEY (student_id) REFERENCES users(id) ON DELETE SET NULL
+        )`,
+        `CREATE TABLE IF NOT EXISTS question_banks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          guru_id INTEGER,
+          title TEXT NOT NULL,
+          questions_json TEXT NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (guru_id) REFERENCES users(id) ON DELETE CASCADE
+        )`
+      ]);
+
+      const countRes = await tursoClient.execute('SELECT COUNT(*) as count FROM users');
+      const count = Number(countRes.rows[0].count);
+      if (count === 0) {
+        await tursoClient.batch([
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['admin', hashPassword('admin123'), 'admin', 'Administrator Utama', JSON.stringify({ roleDesc: 'Super Admin' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['guru', hashPassword('guru123'), 'guru', 'Ibu Guru Sarah, S.Pd', JSON.stringify({ nip: '198501152010012001', subject: 'Ilmu Pengetahuan Alam' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['1001', hashPassword('123'), 'siswa', 'Ahmad Dani', JSON.stringify({ nis: '1001', class: '7-A' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['1002', hashPassword('123'), 'siswa', 'Budi Santoso', JSON.stringify({ nis: '1002', class: '7-A' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['1003', hashPassword('123'), 'siswa', 'Citra Lestari', JSON.stringify({ nis: '1003', class: '7-A' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['1004', hashPassword('123'), 'siswa', 'Dewi Anggraini', JSON.stringify({ nis: '1004', class: '7-B' })]
+          },
+          {
+            sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+            args: ['1005', hashPassword('123'), 'siswa', 'Eko Prasetyo', JSON.stringify({ nis: '1005', class: '7-B' })]
+          }
+        ]);
+        console.log('[DB] Turso database seeded with default users.');
+      }
+    } catch (err) {
+      console.error('[DB] Turso init error:', err.message);
     }
-
-    // Transparently upgrade legacy unsalted hash to salted PBKDF2
-    if (!user.password.includes('$')) {
-      user.password = hashPassword(password);
-      saveStore();
-    }
-
-    const safeUser = { ...user };
-    delete safeUser.password;
-    return safeUser;
   }
 
-  static getUserById(id) {
-    loadStore();
+  // --- Auth & User Management ---
+  static async authenticate(username, password) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'SELECT id, username, password, role, name, extra, created_at FROM users WHERE username = ?',
+        args: [username]
+      });
+      const user = res.rows[0];
+      if (!user) return null;
+
+      if (!verifyPassword(password, user.password)) {
+        return null;
+      }
+
+      // Upgrade legacy unsalted hash if encountered
+      if (!user.password.includes('$')) {
+        const newHash = hashPassword(password);
+        tursoClient.execute({
+          sql: 'UPDATE users SET password = ? WHERE id = ?',
+          args: [newHash, user.id]
+        }).catch(() => {});
+      }
+
+      delete user.password;
+      if (user.extra) {
+        try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
+      }
+      return user;
+    }
+
+    // Fallback store
+    const store = getFallbackStore();
+    const user = store.users.find(u => u.username === username);
+    if (!user) return null;
+    if (!verifyPassword(password, user.password)) return null;
+
+    const copy = { ...user };
+    delete copy.password;
+    return copy;
+  }
+
+  static async getUserById(id) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'SELECT id, username, role, name, extra, created_at FROM users WHERE id = ?',
+        args: [id]
+      });
+      const user = res.rows[0];
+      if (user && user.extra) {
+        try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
+      }
+      return user || null;
+    }
+
+    const store = getFallbackStore();
     const user = store.users.find(u => u.id === Number(id));
     if (!user) return null;
-    const safeUser = { ...user };
-    delete safeUser.password;
-    return safeUser;
+    const copy = { ...user };
+    delete copy.password;
+    return copy;
   }
 
-  static getUserByUsername(username) {
-    loadStore();
+  static async getUserByUsername(username) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'SELECT id, username, role, name, extra, created_at FROM users WHERE username = ?',
+        args: [username]
+      });
+      const user = res.rows[0];
+      if (user && user.extra) {
+        try { user.extra = JSON.parse(user.extra); } catch (e) { user.extra = {}; }
+      }
+      return user || null;
+    }
+
+    const store = getFallbackStore();
     const user = store.users.find(u => u.username === username);
     if (!user) return null;
-    const safeUser = { ...user };
-    delete safeUser.password;
-    return safeUser;
+    const copy = { ...user };
+    delete copy.password;
+    return copy;
   }
 
-  static listUsersByRole(role) {
-    loadStore();
+  static async listUsersByRole(role) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'SELECT id, username, role, name, extra, created_at FROM users WHERE role = ? ORDER BY id DESC',
+        args: [role]
+      });
+      return res.rows.map(r => {
+        const item = { ...r };
+        delete item.password;
+        if (item.extra) {
+          try { item.extra = JSON.parse(item.extra); } catch (e) { item.extra = {}; }
+        }
+        return item;
+      });
+    }
+
+    const store = getFallbackStore();
     return store.users
       .filter(u => u.role === role)
+      .sort((a, b) => b.id - a.id)
       .map(u => {
         const copy = { ...u };
         delete copy.password;
         return copy;
-      })
-      .reverse();
+      });
   }
 
-  static createUser({ username, password, role, name, extra = {} }) {
-    loadStore();
-    const existing = store.users.find(u => u.username === username);
-    if (existing) {
-      throw new Error(`Username ${username} sudah digunakan`);
+  static async createUser({ username, password, role, name, extra = {} }) {
+    const hashed = hashPassword(password || '123');
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'INSERT INTO users (username, password, role, name, extra) VALUES (?, ?, ?, ?, ?)',
+        args: [username, hashed, role, name, JSON.stringify(extra)]
+      });
+      const newId = Number(res.lastInsertRowid);
+      return this.getUserById(newId);
     }
 
+    const store = getFallbackStore();
+    const nextId = (store.users.reduce((max, u) => Math.max(max, u.id), 0) || 0) + 1;
     const newUser = {
-      id: store.nextUserId++,
+      id: nextId,
       username,
-      password: hashPassword(password || '123'),
+      password: hashed,
       role,
       name,
       extra,
       created_at: new Date().toISOString()
     };
-
     store.users.push(newUser);
-    saveStore();
-
-    const safeUser = { ...newUser };
-    delete safeUser.password;
-    return safeUser;
+    saveFallbackStore(store);
+    const copy = { ...newUser };
+    delete copy.password;
+    return copy;
   }
 
-  static updateUser(id, { name, password, extra }) {
-    loadStore();
-    const user = store.users.find(u => u.id === Number(id));
-    if (!user) return null;
+  static async updateUser(id, { name, password, extra }) {
+    if (isTurso && tursoClient) {
+      let query = 'UPDATE users SET name = ?';
+      const params = [name];
+      if (password) {
+        query += ', password = ?';
+        params.push(hashPassword(password));
+      }
+      if (extra !== undefined) {
+        query += ', extra = ?';
+        params.push(JSON.stringify(extra));
+      }
+      query += ' WHERE id = ?';
+      params.push(id);
 
-    if (name !== undefined) user.name = name;
-    if (password) user.password = hashPassword(password);
-    if (extra !== undefined) user.extra = extra;
+      await tursoClient.execute({ sql: query, args: params });
+      return this.getUserById(id);
+    }
 
-    saveStore();
-
-    const safeUser = { ...user };
-    delete safeUser.password;
-    return safeUser;
-  }
-
-  static deleteUser(id) {
-    loadStore();
+    const store = getFallbackStore();
     const idx = store.users.findIndex(u => u.id === Number(id));
     if (idx !== -1) {
-      store.users.splice(idx, 1);
-      saveStore();
-      return true;
+      if (name) store.users[idx].name = name;
+      if (password) store.users[idx].password = hashPassword(password);
+      if (extra !== undefined) store.users[idx].extra = extra;
+      saveFallbackStore(store);
+      return this.getUserById(id);
     }
-    return false;
+    return null;
   }
 
-  // Game Session & Student Records Persistence
-  static saveGameSession({ id, pin, guruId, guruName, title, totalQuestions, totalPlayers, results }) {
-    loadStore();
-    const session = {
+  static async deleteUser(id) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'DELETE FROM users WHERE id = ?',
+        args: [id]
+      });
+      return res.rowsAffected > 0;
+    }
+
+    const store = getFallbackStore();
+    const initLen = store.users.length;
+    store.users = store.users.filter(u => u.id !== Number(id));
+    saveFallbackStore(store);
+    return store.users.length < initLen;
+  }
+
+  // --- Game Session & Student Records Persistence ---
+  static async saveGameSession({ id, pin, guruId, guruName, title, totalQuestions, totalPlayers, results }) {
+    if (isTurso && tursoClient) {
+      const statements = [
+        {
+          sql: `INSERT INTO game_sessions (id, pin, guru_id, guru_name, title, total_questions, total_players, results_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            id,
+            pin,
+            guruId || null,
+            guruName || 'Guru Anonim',
+            title || 'Kuis Clash of Champion',
+            totalQuestions || 0,
+            totalPlayers || 0,
+            JSON.stringify(results || {})
+          ]
+        }
+      ];
+
+      if (results && results.fullRanking && Array.isArray(results.fullRanking)) {
+        for (let i = 0; i < results.fullRanking.length; i++) {
+          const p = results.fullRanking[i];
+          statements.push({
+            sql: `INSERT INTO student_records (
+                    game_session_id, student_id, student_identifier, student_name, 
+                    score, rank, accuracy, max_streak, boxes_taken
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            args: [
+              id,
+              p.studentId || null,
+              p.studentIdentifier || p.nickname,
+              p.nickname,
+              p.score || 0,
+              i + 1,
+              p.accuracy || 0,
+              p.maxStreak || 0,
+              p.boxesTaken || 0
+            ]
+          });
+        }
+      }
+
+      await tursoClient.batch(statements);
+      return id;
+    }
+
+    const store = getFallbackStore();
+    store.game_sessions.unshift({
       id,
       pin,
       guru_id: guruId || null,
@@ -252,15 +418,12 @@ class AppDatabase {
       total_players: totalPlayers || 0,
       results_json: JSON.stringify(results || {}),
       created_at: new Date().toISOString()
-    };
-
-    store.game_sessions.push(session);
+    });
 
     if (results && results.fullRanking && Array.isArray(results.fullRanking)) {
-      for (let i = 0; i < results.fullRanking.length; i++) {
-        const p = results.fullRanking[i];
+      results.fullRanking.forEach((p, i) => {
         store.student_records.push({
-          id: store.nextRecordId++,
+          id: store.student_records.length + 1,
           game_session_id: id,
           student_id: p.studentId || null,
           student_identifier: p.studentIdentifier || p.nickname,
@@ -272,33 +435,60 @@ class AppDatabase {
           boxes_taken: p.boxesTaken || 0,
           created_at: new Date().toISOString()
         });
-      }
+      });
     }
 
-    saveStore();
+    saveFallbackStore(store);
     return id;
   }
 
-  static listGameSessions(guruId = null) {
-    loadStore();
-    let list = store.game_sessions;
-    if (guruId) {
-      list = list.filter(s => s.guru_id === Number(guruId));
+  static async listGameSessions(guruId = null) {
+    if (isTurso && tursoClient) {
+      let res;
+      if (guruId) {
+        res = await tursoClient.execute({
+          sql: `SELECT id, pin, guru_id, guru_name, title, total_questions, total_players, created_at 
+                FROM game_sessions 
+                WHERE guru_id = ? 
+                ORDER BY created_at DESC`,
+          args: [guruId]
+        });
+      } else {
+        res = await tursoClient.execute(`SELECT id, pin, guru_id, guru_name, title, total_questions, total_players, created_at 
+                FROM game_sessions 
+                ORDER BY created_at DESC`);
+      }
+      return res.rows;
     }
-    return [...list].reverse().map(s => ({
-      id: s.id,
-      pin: s.pin,
-      guru_id: s.guru_id,
-      guru_name: s.guru_name,
-      title: s.title,
-      total_questions: s.total_questions,
-      total_players: s.total_players,
-      created_at: s.created_at
-    }));
+
+    const store = getFallbackStore();
+    return store.game_sessions
+      .filter(s => guruId ? s.guru_id === Number(guruId) : true)
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
-  static getGameSessionById(id) {
-    loadStore();
+  static async getGameSessionById(id) {
+    if (isTurso && tursoClient) {
+      const sessionRes = await tursoClient.execute({
+        sql: 'SELECT * FROM game_sessions WHERE id = ?',
+        args: [id]
+      });
+      const session = sessionRes.rows[0];
+      if (!session) return null;
+
+      if (session.results_json) {
+        try { session.results = JSON.parse(session.results_json); } catch (e) { session.results = {}; }
+      }
+
+      const recordsRes = await tursoClient.execute({
+        sql: 'SELECT * FROM student_records WHERE game_session_id = ? ORDER BY rank ASC',
+        args: [id]
+      });
+      session.studentRecords = recordsRes.rows;
+      return session;
+    }
+
+    const store = getFallbackStore();
     const session = store.game_sessions.find(s => s.id === id);
     if (!session) return null;
 
@@ -306,124 +496,236 @@ class AppDatabase {
     if (copy.results_json) {
       try { copy.results = JSON.parse(copy.results_json); } catch (e) { copy.results = {}; }
     }
-
     copy.studentRecords = store.student_records
       .filter(r => r.game_session_id === id)
       .sort((a, b) => a.rank - b.rank);
-
     return copy;
   }
 
-  static getStudentRecordHistory(studentIdOrIdentifier) {
-    loadStore();
-    const sId = Number(studentIdOrIdentifier);
-    const sStr = String(studentIdOrIdentifier);
+  static async getStudentRecordHistory(studentIdOrIdentifier) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: `SELECT sr.*, gs.title as game_title, gs.created_at as game_date, gs.guru_name
+              FROM student_records sr
+              JOIN game_sessions gs ON sr.game_session_id = gs.id
+              WHERE sr.student_id = ? OR sr.student_identifier = ?
+              ORDER BY sr.created_at DESC`,
+        args: [studentIdOrIdentifier, String(studentIdOrIdentifier)]
+      });
+      return res.rows;
+    }
 
-    const records = store.student_records.filter(r => r.student_id === sId || r.student_identifier === sStr);
-    return records.map(r => {
-      const session = store.game_sessions.find(s => s.id === r.game_session_id) || {};
-      return {
-        ...r,
-        game_title: session.title || 'Kuis',
-        game_date: session.created_at || r.created_at,
-        guru_name: session.guru_name || '-'
-      };
-    }).reverse();
+    const store = getFallbackStore();
+    const idStr = String(studentIdOrIdentifier);
+    return store.student_records
+      .filter(sr => sr.student_id === Number(studentIdOrIdentifier) || sr.student_identifier === idStr)
+      .map(sr => {
+        const gs = store.game_sessions.find(g => g.id === sr.game_session_id) || {};
+        return {
+          ...sr,
+          game_title: gs.title || 'Kuis',
+          game_date: gs.created_at || sr.created_at,
+          guru_name: gs.guru_name || 'Guru'
+        };
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
-  // Question Banks
-  static saveQuestionBank(guruId, title, questions) {
-    loadStore();
+  // --- Question Banks ---
+  static async saveQuestionBank(guruId, title, questions) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'INSERT INTO question_banks (guru_id, title, questions_json) VALUES (?, ?, ?)',
+        args: [guruId, title, JSON.stringify(questions)]
+      });
+      return Number(res.lastInsertRowid);
+    }
+
+    const store = getFallbackStore();
+    const nextId = (store.question_banks.reduce((max, b) => Math.max(max, b.id), 0) || 0) + 1;
     const newBank = {
-      id: store.nextBankId++,
+      id: nextId,
       guru_id: Number(guruId),
       title,
       questions_json: JSON.stringify(questions),
       created_at: new Date().toISOString()
     };
-
-    store.question_banks.push(newBank);
-    saveStore();
-    return newBank.id;
+    store.question_banks.unshift(newBank);
+    saveFallbackStore(store);
+    return nextId;
   }
 
-  static listQuestionBanks(guruId = null) {
-    loadStore();
-    let list = store.question_banks;
-    if (guruId !== null && guruId !== undefined && guruId !== '') {
-      list = list.filter(b => b.guru_id === Number(guruId));
+  static async listQuestionBanks(guruId = null) {
+    if (isTurso && tursoClient) {
+      let res;
+      if (guruId !== null && guruId !== undefined && guruId !== '') {
+        res = await tursoClient.execute({
+          sql: `SELECT qb.id, qb.guru_id, qb.title, qb.created_at, qb.questions_json,
+                       u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
+                FROM question_banks qb
+                LEFT JOIN users u ON qb.guru_id = u.id
+                WHERE qb.guru_id = ?
+                ORDER BY qb.created_at DESC`,
+          args: [Number(guruId)]
+        });
+      } else {
+        res = await tursoClient.execute(`SELECT qb.id, qb.guru_id, qb.title, qb.created_at, qb.questions_json,
+                       u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
+                FROM question_banks qb
+                LEFT JOIN users u ON qb.guru_id = u.id
+                ORDER BY qb.created_at DESC`);
+      }
+
+      return res.rows.map(r => {
+        let questionCount = 0;
+        if (r.questions_json) {
+          try {
+            const parsed = JSON.parse(r.questions_json);
+            questionCount = Array.isArray(parsed) ? parsed.length : 0;
+          } catch (e) {}
+        }
+
+        let extraObj = {};
+        if (r.creator_extra) {
+          try { extraObj = JSON.parse(r.creator_extra); } catch (e) {}
+        }
+
+        const copy = { ...r };
+        delete copy.questions_json;
+        return {
+          ...copy,
+          size: r.questions_json ? r.questions_json.length : 0,
+          questionCount,
+          creator_extra: extraObj
+        };
+      });
     }
 
-    return [...list].reverse().map(b => {
-      const creator = store.users.find(u => u.id === b.guru_id) || {};
-      let questionCount = 0;
-      try {
-        const qArr = JSON.parse(b.questions_json);
-        questionCount = Array.isArray(qArr) ? qArr.length : 0;
-      } catch (e) {}
-
-      return {
-        id: b.id,
-        guru_id: b.guru_id,
-        title: b.title,
-        created_at: b.created_at,
-        size: b.questions_json.length,
-        creator_name: creator.name || 'Guru',
-        creator_username: creator.username || '',
-        creator_role: creator.role || 'guru',
-        creator_extra: creator.extra || {},
-        questionCount
-      };
-    });
+    const store = getFallbackStore();
+    return store.question_banks
+      .filter(qb => (guruId !== null && guruId !== undefined && guruId !== '') ? qb.guru_id === Number(guruId) : true)
+      .map(qb => {
+        const creator = store.users.find(u => u.id === qb.guru_id) || {};
+        let questionCount = 0;
+        try {
+          const parsed = JSON.parse(qb.questions_json);
+          questionCount = Array.isArray(parsed) ? parsed.length : 0;
+        } catch (e) {}
+        return {
+          id: qb.id,
+          guru_id: qb.guru_id,
+          title: qb.title,
+          created_at: qb.created_at,
+          size: qb.questions_json ? qb.questions_json.length : 0,
+          questionCount,
+          creator_name: creator.name || 'Guru',
+          creator_username: creator.username || '',
+          creator_role: creator.role || 'guru',
+          creator_extra: creator.extra || {}
+        };
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   }
 
-  static getQuestionBank(id, guruId = null) {
-    loadStore();
-    const bank = store.question_banks.find(b => {
+  static async getQuestionBank(id, guruId = null) {
+    if (isTurso && tursoClient) {
+      let res;
       if (guruId !== null && guruId !== undefined && guruId !== '') {
-        return b.id === Number(id) && b.guru_id === Number(guruId);
+        res = await tursoClient.execute({
+          sql: `SELECT qb.*, u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
+                FROM question_banks qb
+                LEFT JOIN users u ON qb.guru_id = u.id
+                WHERE qb.id = ? AND qb.guru_id = ?`,
+          args: [Number(id), Number(guruId)]
+        });
+      } else {
+        res = await tursoClient.execute({
+          sql: `SELECT qb.*, u.name as creator_name, u.username as creator_username, u.role as creator_role, u.extra as creator_extra
+                FROM question_banks qb
+                LEFT JOIN users u ON qb.guru_id = u.id
+                WHERE qb.id = ?`,
+          args: [Number(id)]
+        });
       }
-      return b.id === Number(id);
+
+      const row = res.rows[0];
+      if (row) {
+        if (row.questions_json) {
+          try { row.questions = JSON.parse(row.questions_json); } catch (e) { row.questions = []; }
+        }
+        if (row.creator_extra) {
+          try { row.creator_extra = JSON.parse(row.creator_extra); } catch (e) { row.creator_extra = {}; }
+        }
+      }
+      return row || null;
+    }
+
+    const store = getFallbackStore();
+    const bank = store.question_banks.find(b => {
+      if (b.id !== Number(id)) return false;
+      if (guruId !== null && guruId !== undefined && guruId !== '') {
+        return b.guru_id === Number(guruId);
+      }
+      return true;
     });
-
     if (!bank) return null;
-    const creator = store.users.find(u => u.id === bank.guru_id) || {};
 
+    const creator = store.users.find(u => u.id === bank.guru_id) || {};
     let questions = [];
-    try {
-      questions = JSON.parse(bank.questions_json);
-    } catch (e) {}
+    try { questions = JSON.parse(bank.questions_json); } catch (e) {}
 
     return {
       ...bank,
+      questions,
       creator_name: creator.name || 'Guru',
       creator_username: creator.username || '',
       creator_role: creator.role || 'guru',
-      creator_extra: creator.extra || {},
-      questions
+      creator_extra: creator.extra || {}
     };
   }
 
-  static deleteQuestionBank(id, guruId = null) {
-    loadStore();
-    const idx = store.question_banks.findIndex(b => {
+  static async deleteQuestionBank(id, guruId = null) {
+    if (isTurso && tursoClient) {
+      let res;
       if (guruId !== null && guruId !== undefined && guruId !== '') {
-        return b.id === Number(id) && b.guru_id === Number(guruId);
+        res = await tursoClient.execute({
+          sql: 'DELETE FROM question_banks WHERE id = ? AND guru_id = ?',
+          args: [Number(id), Number(guruId)]
+        });
+      } else {
+        res = await tursoClient.execute({
+          sql: 'DELETE FROM question_banks WHERE id = ?',
+          args: [Number(id)]
+        });
       }
-      return b.id === Number(id);
-    });
-
-    if (idx !== -1) {
-      store.question_banks.splice(idx, 1);
-      saveStore();
-      return true;
+      return res.rowsAffected > 0;
     }
-    return false;
+
+    const store = getFallbackStore();
+    const initLen = store.question_banks.length;
+    store.question_banks = store.question_banks.filter(b => {
+      if (b.id !== Number(id)) return true;
+      if (guruId !== null && guruId !== undefined && guruId !== '') {
+        return b.guru_id !== Number(guruId);
+      }
+      return false;
+    });
+    saveFallbackStore(store);
+    return store.question_banks.length < initLen;
   }
 
-  static close() {
-    saveStore();
+  static async close() {
+    try {
+      if (tursoClient) {
+        tursoClient.close();
+      }
+    } catch (e) {}
   }
 }
+
+// Auto initialize schema & seeds on load
+AppDatabase.init().catch(err => {
+  console.warn('[DB] Background init notice:', err.message);
+});
 
 module.exports = AppDatabase;

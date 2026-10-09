@@ -664,6 +664,7 @@ class GameEngine {
       try {
         const AppDatabase = require('./Database');
         const sessionId = uuidv4();
+        savedSessionId = sessionId;
         AppDatabase.saveGameSession({
           id: sessionId,
           pin: pin,
@@ -673,9 +674,11 @@ class GameEngine {
           totalQuestions: room.questions ? room.questions.length : (room.boxes ? room.boxes.length : 0),
           totalPlayers: room.players.size,
           results
+        }).then(() => {
+          console.log(`[GameEngine] Sesi game berhasil disimpan ke DB. ID: ${sessionId}, Guru: ${room.guruName}`);
+        }).catch(err => {
+          console.error('[GameEngine] Gagal menyimpan sesi game ke DB:', err.message);
         });
-        savedSessionId = sessionId;
-        console.log(`[GameEngine] Sesi game berhasil disimpan ke DB. ID: ${sessionId}, Guru: ${room.guruName}`);
       } catch (err) {
         console.error('[GameEngine] Gagal menyimpan sesi game ke DB:', err.message);
       }
