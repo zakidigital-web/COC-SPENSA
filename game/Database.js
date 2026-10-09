@@ -131,6 +131,13 @@ class AppDatabase {
           questions_json TEXT NOT NULL,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (guru_id) REFERENCES users(id) ON DELETE CASCADE
+        )`,
+        `CREATE TABLE IF NOT EXISTS active_rooms (
+          pin TEXT PRIMARY KEY,
+          admin_token TEXT NOT NULL,
+          status TEXT DEFAULT 'waiting',
+          room_data TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
         )`
       ]);
 
@@ -712,6 +719,97 @@ class AppDatabase {
     });
     saveFallbackStore(store);
     return store.question_banks.length < initLen;
+  }
+
+  // --- Active Rooms (Serverless Realtime State in Turso) ---
+  static async saveActiveRoom(pin, adminToken, status, roomData) {
+    const now = Date.now();
+    const dataStr = typeof roomData === 'string' ? roomData : JSON.stringify(roomData);
+    if (isTurso && tursoClient) {
+      await tursoClient.execute({
+        sql: `INSERT INTO active_rooms (pin, admin_token, status, room_data, updated_at)
+              VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(pin) DO UPDATE SET
+                admin_token = excluded.admin_token,
+                status = excluded.status,
+                room_data = excluded.room_data,
+                updated_at = excluded.updated_at`,
+        args: [String(pin), String(adminToken), String(status), dataStr, now]
+      });
+      return true;
+    }
+
+    const store = getFallbackStore();
+    if (!store.active_rooms) store.active_rooms = {};
+    store.active_rooms[String(pin)] = {
+      pin: String(pin),
+      adminToken: String(adminToken),
+      status: String(status),
+      roomData: typeof roomData === 'object' ? roomData : JSON.parse(dataStr),
+      updatedAt: now
+    };
+    saveFallbackStore(store);
+    return true;
+  }
+
+  static async getActiveRoom(pin) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'SELECT * FROM active_rooms WHERE pin = ?',
+        args: [String(pin)]
+      });
+      const row = res.rows[0];
+      if (!row) return null;
+      let roomData = {};
+      try {
+        roomData = JSON.parse(row.room_data);
+      } catch (e) {}
+      return {
+        pin: row.pin,
+        adminToken: row.admin_token,
+        status: row.status,
+        roomData,
+        updatedAt: row.updated_at
+      };
+    }
+
+    const store = getFallbackStore();
+    if (!store.active_rooms) return null;
+    return store.active_rooms[String(pin)] || null;
+  }
+
+  static async deleteActiveRoom(pin) {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute({
+        sql: 'DELETE FROM active_rooms WHERE pin = ?',
+        args: [String(pin)]
+      });
+      return res.rowsAffected > 0;
+    }
+
+    const store = getFallbackStore();
+    if (store.active_rooms && store.active_rooms[String(pin)]) {
+      delete store.active_rooms[String(pin)];
+      saveFallbackStore(store);
+      return true;
+    }
+    return false;
+  }
+
+  static async listActiveRooms() {
+    if (isTurso && tursoClient) {
+      const res = await tursoClient.execute('SELECT pin, admin_token, status, updated_at FROM active_rooms ORDER BY updated_at DESC');
+      return res.rows;
+    }
+
+    const store = getFallbackStore();
+    if (!store.active_rooms) return [];
+    return Object.values(store.active_rooms).map(r => ({
+      pin: r.pin,
+      admin_token: r.adminToken,
+      status: r.status,
+      updated_at: r.updatedAt
+    }));
   }
 
   static async close() {

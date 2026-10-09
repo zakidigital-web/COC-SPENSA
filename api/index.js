@@ -740,6 +740,430 @@ app.get('/api/student/history/:identifier', async (req, res) => {
   }
 });
 
+// ========================================================
+// SERVERLESS REST POLLING LAYER (OPTION 3 FOR VERCEL)
+// ========================================================
+
+async function ensureRoomLoaded(pin) {
+  if (!pin) return null;
+  const cleanPin = String(pin).trim();
+  let room = roomManager.getRoom(cleanPin);
+  if (room) return room;
+
+  // Restore from Turso Cloud SQLite
+  const dbRecord = await AppDatabase.getActiveRoom(cleanPin);
+  if (!dbRecord || !dbRecord.roomData) return null;
+  const d = dbRecord.roomData;
+
+  room = {
+    pin: cleanPin,
+    adminToken: d.adminToken || dbRecord.adminToken,
+    adminSocketId: d.adminSocketId || 'rest_admin',
+    status: d.status || dbRecord.status || 'lobby',
+    players: new Map(Object.entries(d.players || {})),
+    questions: d.questions || [],
+    boxes: d.boxes || [],
+    maxPlayers: d.maxPlayers || 50,
+    guruId: d.guruId || null,
+    guruName: d.guruName || 'Guru Anonim',
+    isAnonymous: d.isAnonymous !== undefined ? d.isAnonymous : true,
+    title: d.title || 'Kuis Clash of Champion',
+    config: d.config || { timePerQuestion: 30, globalTimeLimit: 0 },
+    soloScore: d.soloScore || 0,
+    globalEndTime: d.globalEndTime || null,
+    recentEvents: d.recentEvents || []
+  };
+
+  if (room.questions && room.questions.length > 0) {
+    room.questionMap = new Map();
+    for (const q of room.questions) {
+      if (q && q.id) room.questionMap.set(q.id, q);
+    }
+  }
+
+  roomManager.rooms.set(cleanPin, room);
+  return room;
+}
+
+async function syncRoomToDB(room, event = null) {
+  if (!room) return;
+  if (!room.recentEvents) room.recentEvents = [];
+  if (event) {
+    room.recentEvents.push({
+      id: uuidv4(),
+      type: event.type,
+      data: event.data,
+      timestamp: Date.now()
+    });
+    if (room.recentEvents.length > 60) {
+      room.recentEvents = room.recentEvents.slice(-60);
+    }
+  }
+
+  const serialized = {
+    pin: room.pin,
+    adminToken: room.adminToken,
+    adminSocketId: room.adminSocketId,
+    status: room.status,
+    players: Object.fromEntries(room.players),
+    questions: room.questions,
+    boxes: room.boxes,
+    maxPlayers: room.maxPlayers,
+    guruId: room.guruId,
+    guruName: room.guruName,
+    isAnonymous: room.isAnonymous,
+    title: room.title,
+    config: room.config,
+    soloScore: room.soloScore,
+    globalEndTime: room.globalEndTime,
+    recentEvents: room.recentEvents
+  };
+
+  try {
+    await AppDatabase.saveActiveRoom(room.pin, room.adminToken, room.status, serialized);
+  } catch (err) {
+    console.error('[REST Sync Error]:', err.message);
+  }
+}
+
+function sanitizeRoomForClient(room, playerId = null) {
+  if (!room) return null;
+  const players = Array.from(room.players.values()).map(p => ({
+    id: p.id,
+    nickname: p.nickname,
+    avatar: p.avatar,
+    studentIdentifier: p.studentIdentifier,
+    score: p.score || 0,
+    streak: p.streak || 0,
+    accuracy: p.accuracy || 0,
+    boxesTaken: p.boxesTaken || 0,
+    connected: true
+  }));
+
+  const sanitizedBoxes = (room.boxes || []).map(b => ({
+    index: b.index,
+    points: b.points,
+    isMystery: b.isMystery,
+    status: b.status,
+    lockedBy: b.lockedBy,
+    lockedByName: b.lockedByName,
+    answeredCorrectly: b.answeredCorrectly
+  }));
+
+  const leaderboard = gameEngine.getLeaderboard(room.pin);
+
+  let activeQuestion = null;
+  if (playerId && room.status === 'playing') {
+    const lockedBox = (room.boxes || []).find(b => b.status === 'locked' && b.lockedBy === playerId);
+    if (lockedBox) {
+      const q = (room.questions || []).find(x => x.id === lockedBox.questionId);
+      if (q) {
+        activeQuestion = {
+          boxIndex: lockedBox.index,
+          points: lockedBox.points,
+          timeLimit: room.config.timePerQuestion || 30,
+          question: {
+            text: q.text || q.question,
+            type: q.type || 'mc',
+            options: q.options || [],
+            pairs: q.pairs || [],
+            leftItems: q.leftItems || [],
+            rightItems: q.rightItems || []
+          }
+        };
+      }
+    }
+  }
+
+  return {
+    status: room.status,
+    config: room.config,
+    boxes: sanitizedBoxes,
+    leaderboard,
+    players,
+    playerCount: players.length,
+    globalEndTime: room.globalEndTime,
+    soloScore: room.soloScore || 0,
+    activeQuestion
+  };
+}
+
+/**
+ * POST /api/live/create-room - Serverless Room Creation
+ */
+app.post('/api/live/create-room', async (req, res) => {
+  try {
+    const meta = req.body || {};
+    const { pin, room, adminToken } = roomManager.createRoom('rest_admin', meta.maxPlayers || 50, meta);
+    await syncRoomToDB(room, {
+      type: 'room-created',
+      data: {
+        pin,
+        adminToken,
+        isAnonymous: room.isAnonymous,
+        guruName: room.guruName,
+        guruId: room.guruId
+      }
+    });
+    res.json({
+      success: true,
+      pin,
+      adminToken,
+      isAnonymous: room.isAnonymous,
+      guruName: room.guruName,
+      roomState: sanitizeRoomForClient(room)
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/live/join-room - Serverless Player Join
+ */
+app.post('/api/live/join-room', async (req, res) => {
+  try {
+    const { pin, nickname, avatar, studentId, studentIdentifier, isAnonymous } = req.body;
+    const room = await ensureRoomLoaded(pin);
+    if (!room) return res.status(404).json({ success: false, message: 'Room tidak ditemukan' });
+    if (room.status !== 'lobby') return res.status(400).json({ success: false, message: 'Game sudah dimulai atau selesai' });
+
+    const playerId = uuidv4();
+    const player = {
+      id: playerId,
+      nickname: (nickname || 'Pemain').trim().substring(0, 25),
+      avatar: avatar || '🦁',
+      studentId: studentId || null,
+      studentIdentifier: studentIdentifier || nickname,
+      isAnonymous: Boolean(isAnonymous),
+      score: 0,
+      streak: 0,
+      maxStreak: 0,
+      answers: [],
+      boxesTaken: 0,
+      connected: true,
+      joinedAt: Date.now()
+    };
+    room.players.set(playerId, player);
+    await syncRoomToDB(room, {
+      type: 'player-joined',
+      data: {
+        player,
+        playerCount: room.players.size,
+        players: Array.from(room.players.values())
+      }
+    });
+    res.json({ success: true, playerId, pin, player });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * POST /api/live/action - Serverless Game Action Dispatcher
+ */
+app.post('/api/live/action', async (req, res) => {
+  try {
+    const { action, pin, ...payload } = req.body;
+    const room = await ensureRoomLoaded(pin);
+    if (!room) return res.status(404).json({ success: false, message: 'Room tidak ditemukan' });
+
+    let actionResult = { success: true };
+
+    switch (action) {
+      case 'update-config': {
+        if (payload.config) room.config = { ...room.config, ...payload.config };
+        await syncRoomToDB(room, { type: 'config-updated', data: { config: room.config } });
+        break;
+      }
+      case 'update-questions': {
+        if (Array.isArray(payload.questions)) {
+          room.questions = payload.questions;
+          room.questionMap = new Map();
+          for (const q of room.questions) {
+            if (q) {
+              if (!q.id) q.id = uuidv4();
+              room.questionMap.set(q.id, q);
+            }
+          }
+        }
+        await syncRoomToDB(room, { type: 'questions-updated', data: { count: room.questions.length } });
+        break;
+      }
+      case 'start-game': {
+        if (payload.config) room.config = { ...room.config, ...payload.config };
+        if (Array.isArray(payload.questions) && payload.questions.length > 0) {
+          room.questions = payload.questions;
+        }
+        const sanitizedBoxes = gameEngine.startGame(room.pin, room.adminSocketId, payload.config);
+        await syncRoomToDB(room, {
+          type: 'game-started',
+          data: {
+            boxes: sanitizedBoxes,
+            globalEndTime: room.globalEndTime,
+            globalTimeLimit: room.config.globalTimeLimit
+          }
+        });
+        actionResult.boxes = sanitizedBoxes;
+        break;
+      }
+      case 'pause-game': {
+        gameEngine.pauseGame(room.pin);
+        await syncRoomToDB(room, { type: 'game-paused', data: {} });
+        break;
+      }
+      case 'resume-game': {
+        gameEngine.resumeGame(room.pin);
+        await syncRoomToDB(room, { type: 'game-resumed', data: {} });
+        break;
+      }
+      case 'end-game': {
+        const results = gameEngine.endGame(room.pin);
+        await syncRoomToDB(room, { type: 'game-ended', data: results });
+        actionResult.results = results;
+        break;
+      }
+      case 'claim-box': {
+        const claimResult = gameEngine.claimBox(room.pin, payload.playerId, payload.boxIndex);
+        if (claimResult.success) {
+          const player = room.players.get(payload.playerId);
+          await syncRoomToDB(room, {
+            type: 'box-locked',
+            data: {
+              boxIndex: payload.boxIndex,
+              lockedBy: payload.playerId,
+              lockedByName: player ? player.nickname : 'Pemain'
+            }
+          });
+        }
+        actionResult = claimResult;
+        break;
+      }
+      case 'submit-answer': {
+        const ansResult = gameEngine.submitAnswer(room.pin, payload.playerId, payload.boxIndex, payload.answer, payload.timeRemaining);
+        await syncRoomToDB(room, {
+          type: 'box-unlocked',
+          data: {
+            boxIndex: payload.boxIndex,
+            answeredCorrectly: ansResult.correct,
+            points: ansResult.pointsAwarded || 0,
+            status: ansResult.correct ? 'completed' : 'available'
+          }
+        });
+        await syncRoomToDB(room, {
+          type: 'leaderboard-updated',
+          data: { leaderboard: gameEngine.getLeaderboard(room.pin) }
+        });
+        actionResult = ansResult;
+        break;
+      }
+      case 'send-emote': {
+        const p = room.players.get(payload.playerId);
+        await syncRoomToDB(room, {
+          type: 'emote-received',
+          data: {
+            playerId: payload.playerId,
+            nickname: p ? p.nickname : 'Pemain',
+            avatar: p ? p.avatar : '🦁',
+            emote: payload.emote
+          }
+        });
+        break;
+      }
+      case 'admin-claim-box': {
+        const adminClaim = gameEngine.adminClaimBox(room.pin, payload.boxIndex);
+        await syncRoomToDB(room, {
+          type: 'box-locked',
+          data: {
+            boxIndex: payload.boxIndex,
+            lockedBy: 'admin',
+            lockedByName: '👨‍🏫 Guru'
+          }
+        });
+        actionResult = adminClaim;
+        break;
+      }
+      case 'admin-complete-box': {
+        const completeResult = gameEngine.adminCompleteBox(room.pin, payload.boxIndex, payload.isCorrect, payload.customPoints);
+        await syncRoomToDB(room, {
+          type: 'box-unlocked',
+          data: {
+            boxIndex: payload.boxIndex,
+            answeredCorrectly: payload.isCorrect,
+            status: 'completed'
+          }
+        });
+        actionResult = completeResult;
+        break;
+      }
+      case 'admin-release-box': {
+        gameEngine.adminReleaseBox(room.pin, payload.boxIndex);
+        await syncRoomToDB(room, {
+          type: 'box-unlocked',
+          data: {
+            boxIndex: payload.boxIndex,
+            status: 'available'
+          }
+        });
+        break;
+      }
+      case 'kick-player': {
+        room.players.delete(payload.playerId);
+        await syncRoomToDB(room, {
+          type: 'player-left',
+          data: {
+            playerId: payload.playerId,
+            playerCount: room.players.size,
+            players: Array.from(room.players.values())
+          }
+        });
+        break;
+      }
+      case 'reconnect-attempt': {
+        actionResult = {
+          success: true,
+          pin: room.pin,
+          adminToken: room.adminToken,
+          roomState: sanitizeRoomForClient(room, payload.playerId)
+        };
+        break;
+      }
+      default: {
+        return res.status(400).json({ success: false, message: `Unknown action: ${action}` });
+      }
+    }
+
+    res.json(actionResult);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+/**
+ * GET /api/live/poll - Realtime State Polling for Clients
+ */
+app.get('/api/live/poll', async (req, res) => {
+  try {
+    const pin = String(req.query.pin || '').trim();
+    const since = parseInt(req.query.since) || 0;
+    const playerId = req.query.playerId || null;
+    const room = await ensureRoomLoaded(pin);
+    if (!room) return res.status(404).json({ success: false, message: 'Room tidak ditemukan' });
+
+    const events = (room.recentEvents || []).filter(e => e.timestamp > since);
+    res.json({
+      success: true,
+      pin: room.pin,
+      status: room.status,
+      roomState: sanitizeRoomForClient(room, playerId),
+      events,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 io.on('connection', (socket) => {
   log('info', 'Socket connected', { socketId: socket.id });
 
